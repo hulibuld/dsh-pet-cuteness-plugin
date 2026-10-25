@@ -975,9 +975,14 @@ function measureNeighborOffset(scale) {
       if (topEdge === null || rect.top < topEdge) topEdge = rect.top
     }
     if (topEdge === null) return PET_ANCHOR_OFFSET_Y
-    // 让到人家气泡上面：距离 = 立绘上沿到它上沿 + 一点缝，再按比例缩放。
-    const gap = Math.round((sprite.top - topEdge + 6) * Math.max(0.5, finiteOr(scale, 1)))
-    return Math.max(PET_ANCHOR_OFFSET_Y, gap)
+    // 让到人家气泡上面：距离 = 立绘上沿到它上沿 + 一点缝。
+    //
+    // 不乘 bubbleScale：sprite.top 与 topEdge 都是 getBoundingClientRect 的视口像素，
+    // 缩放已经含在里面了；再乘一次就是双重缩放（bubbleScale 一改，气泡会飘到屏幕外）。
+    // 上限 220px 是防呆：人家的气泡若飘到屏幕顶端，我们跟着飘过去会整个飞出可视区，
+    // 不如老老实实贴着立绘头顶。
+    const gap = Math.round(sprite.top - topEdge + 6)
+    return Math.min(220, Math.max(PET_ANCHOR_OFFSET_Y, gap))
   } catch {
     /* 读不到就按默认间隙 */
   }
