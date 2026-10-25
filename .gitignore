@@ -1,0 +1,24 @@
+# probe/client.js（浏览器半构建产物）**故意纳入版本控制**。
+#
+# 为什么不 ignore：这个插件的主要用法之一是把仓库目录直接 `link:` 进 DSH profile
+# （安装根就是 probe/），那样不会跑 npm 的 prepare，client.js 不存在就等于
+# 「浏览器半 import failed」——整块界面哑掉。所以宁可让构建产物跟着源码走，
+# 代价是每次改 scripts/build-client.mjs 后必须 `npm run build` 再提交。
+# `npm run build:check` 会拦住「改了源码忘了重建」这种提交。
+node_modules/
+.DS_Store
+*.log
+
+# 本地开发用的临时/调试产物
+*.tmp
+.github-auth.json
+
+# 由 DSH 上传流程补充
+Thumbs.db
+desktop.ini
+__pycache__/
+*.pyc
+.venv/
+.env
+.env.local
+.env.*.local

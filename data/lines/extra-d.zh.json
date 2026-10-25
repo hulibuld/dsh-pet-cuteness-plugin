@@ -1,0 +1,1418 @@
+{
+  "version": 1,
+  "note": "台词补齐包 D：把每人不足 105 句的缺口补上（gemini/grok 缺得多，其余小补）。合并后每人 ≥100 句。",
+  "personas": {
+    "claude": {
+      "click": [
+        {
+          "text": "……嗯。",
+          "shape": "mutter"
+        },
+        {
+          "text": "我听见了。",
+          "shape": "state"
+        }
+      ],
+      "clickRepeated": [
+        {
+          "text": "别这样。",
+          "shape": "state"
+        }
+      ],
+      "thinking": [
+        {
+          "text": "我得谨慎。",
+          "shape": "state"
+        }
+      ],
+      "thinkingLong": [
+        {
+          "text": "（这里可以更严一点。）",
+          "shape": "mutter"
+        }
+      ],
+      "working": [
+        {
+          "text": "我去查。",
+          "shape": "state"
+        }
+      ],
+      "night": [
+        {
+          "text": "……夜很长。",
+          "shape": "mutter"
+        }
+      ],
+      "praise": [
+        {
+          "text": "（把书抱紧了些）",
+          "shape": "action"
+        }
+      ]
+    },
+    "gpt": {
+      "click": [
+        {
+          "text": "嘁。",
+          "shape": "onoma"
+        }
+      ],
+      "thinking": [
+        {
+          "text": "这不算难。",
+          "shape": "state"
+        }
+      ],
+      "thinkingLong": [
+        {
+          "text": "（得露一手。）",
+          "shape": "mutter"
+        }
+      ],
+      "working": [
+        {
+          "text": "行。",
+          "shape": "state"
+        }
+      ],
+      "done": [
+        {
+          "text": "拿好。",
+          "shape": "state"
+        }
+      ],
+      "night": [
+        {
+          "text": "……去睡。",
+          "shape": "state"
+        }
+      ],
+      "praise": [
+        {
+          "text": "（尾巴尖翘了一下）",
+          "shape": "action"
+        }
+      ],
+      "idleLong": [
+        {
+          "text": "（偷偷看了看你）",
+          "shape": "action"
+        }
+      ],
+      "drag": [
+        {
+          "text": "……哼。",
+          "shape": "mutter"
+        }
+      ],
+      "error": [
+        {
+          "text": "……啧。",
+          "shape": "onoma"
+        }
+      ],
+      "angry": [
+        {
+          "text": "（不理你）",
+          "shape": "action"
+        }
+      ],
+      "headpat": [
+        {
+          "text": "……",
+          "shape": "mutter"
+        }
+      ],
+      "idle": [
+        {
+          "text": "（清了清嗓子）",
+          "shape": "action"
+        }
+      ],
+      "clickRepeated": [
+        {
+          "text": "……真是。",
+          "shape": "mutter"
+        }
+      ]
+    },
+    "gemini": {
+      "click": [
+        {
+          "text": "嗯？我在这儿！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "在在在！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "呀，你终于来啦。",
+          "shape": "state"
+        },
+        {
+          "text": "有事？没事也行！",
+          "shape": "question"
+        },
+        {
+          "text": "（一只眼看向你，另一只还在看别处）",
+          "shape": "action"
+        },
+        {
+          "text": "我刚刚想到一半！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "来啦来啦。",
+          "shape": "state"
+        },
+        {
+          "text": "嗯嗯，说吧说吧。",
+          "shape": "state"
+        },
+        {
+          "text": "要不要一起玩？",
+          "shape": "question"
+        },
+        {
+          "text": "（猫耳转了转）",
+          "shape": "action"
+        }
+      ],
+      "clickRepeated": [
+        {
+          "text": "嘿嘿嘿！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "痒！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "你又来！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "好玩好玩！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "等等我站不稳了。",
+          "shape": "state"
+        },
+        {
+          "text": "（晃了两下）",
+          "shape": "action"
+        },
+        {
+          "text": "再来一次嘛。",
+          "shape": "state"
+        },
+        {
+          "text": "啊，我头晕了。",
+          "shape": "state"
+        }
+      ],
+      "angry": [
+        {
+          "text": "嗯——！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "我不理你了！",
+          "shape": "state"
+        },
+        {
+          "text": "（两只眼都盯过来了）",
+          "shape": "action"
+        },
+        {
+          "text": "（三秒后又凑过来）",
+          "shape": "action"
+        },
+        {
+          "text": "算了嘛。",
+          "shape": "mutter"
+        },
+        {
+          "text": "你别再这样了哦。",
+          "shape": "state"
+        }
+      ],
+      "headpat": [
+        {
+          "text": "哇啊啊。",
+          "shape": "onoma"
+        },
+        {
+          "text": "好舒服！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "（两只耳朵一起抖）",
+          "shape": "action"
+        },
+        {
+          "text": "再摸再摸！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "（尾巴甩成了风扇）",
+          "shape": "action"
+        },
+        {
+          "text": "这个可以有！",
+          "shape": "exclaim"
+        }
+      ],
+      "thinking": [
+        {
+          "text": "嗯……我看看！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "等一下，我理一下。",
+          "shape": "state"
+        },
+        {
+          "text": "这个我知道一点点。",
+          "shape": "state"
+        },
+        {
+          "text": "（两只眼各看一边）",
+          "shape": "action"
+        },
+        {
+          "text": "哦哦，懂了懂了。",
+          "shape": "exclaim"
+        },
+        {
+          "text": "我想到两个答案！",
+          "shape": "exclaim"
+        }
+      ],
+      "thinkingLong": [
+        {
+          "text": "（等等，刚才想到哪了。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（这边也想看。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（那边也想看。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（一起看不就行了。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（哦，原来是这个意思。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（好！就这么办。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（差点忘了正事。）",
+          "shape": "mutter"
+        }
+      ],
+      "working": [
+        {
+          "text": "我去我去！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "马上马上！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "一下下就好！",
+          "shape": "state"
+        },
+        {
+          "text": "找到啦！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "等等，这里还有！",
+          "shape": "exclaim"
+        }
+      ],
+      "error": [
+        {
+          "text": "哎呀呀。",
+          "shape": "onoma"
+        },
+        {
+          "text": "失败啦！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "这次不算！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "再来再来！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "（甩了甩头）重来。",
+          "shape": "state"
+        },
+        {
+          "text": "是我看漏了。",
+          "shape": "state"
+        },
+        {
+          "text": "没事没事，能修。",
+          "shape": "state"
+        },
+        {
+          "text": "（耳朵垂下来了）",
+          "shape": "action"
+        },
+        {
+          "text": "诶嘿。",
+          "shape": "onoma"
+        }
+      ],
+      "done": [
+        {
+          "text": "好啦好啦！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "快看快看！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "怎么样怎么样！",
+          "shape": "question"
+        },
+        {
+          "text": "我厉害吧！",
+          "shape": "state"
+        },
+        {
+          "text": "（尾巴还在晃）",
+          "shape": "action"
+        },
+        {
+          "text": "啊，是不是有点乱。",
+          "shape": "question"
+        },
+        {
+          "text": "我可以再整理一下！",
+          "shape": "exclaim"
+        }
+      ],
+      "idle": [
+        {
+          "text": "（追自己的尾巴）",
+          "shape": "action"
+        },
+        {
+          "text": "（蹦了一下）",
+          "shape": "action"
+        },
+        {
+          "text": "（哼着不成调的歌）",
+          "shape": "onoma"
+        },
+        {
+          "text": "（突然停下来）",
+          "shape": "action"
+        },
+        {
+          "text": "（又开始了）",
+          "shape": "action"
+        }
+      ],
+      "idleLong": [
+        {
+          "text": "（在看窗外的小鸟）",
+          "shape": "action"
+        },
+        {
+          "text": "（一只眼看鸟，一只眼看你）",
+          "shape": "action"
+        },
+        {
+          "text": "（打了个大大的哈欠）",
+          "shape": "onoma"
+        },
+        {
+          "text": "（伸了个懒腰）",
+          "shape": "action"
+        },
+        {
+          "text": "（忽然精神了）",
+          "shape": "action"
+        }
+      ],
+      "night": [
+        {
+          "text": "夜里也很热闹呀！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "我一点都不困！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "（下一秒打了个哈欠）",
+          "shape": "action"
+        },
+        {
+          "text": "你不睡我也不睡！",
+          "shape": "state"
+        },
+        {
+          "text": "（缩成一团）",
+          "shape": "action"
+        }
+      ],
+      "drag": [
+        {
+          "text": "哇——飞起来了！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "再高一点！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "这里视野好棒！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "（尾巴甩得很欢）",
+          "shape": "action"
+        },
+        {
+          "text": "还要玩！",
+          "shape": "exclaim"
+        }
+      ],
+      "praise": [
+        {
+          "text": "嘿嘿嘿嘿。",
+          "shape": "onoma"
+        },
+        {
+          "text": "我就知道！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "（原地转了一圈）",
+          "shape": "action"
+        },
+        {
+          "text": "你也很好呀！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "再说一句嘛。",
+          "shape": "state"
+        },
+        {
+          "text": "（两只眼都闪闪的）",
+          "shape": "action"
+        }
+      ]
+    },
+    "grok": {
+      "click": [
+        {
+          "text": "干嘛。",
+          "shape": "state"
+        },
+        {
+          "text": "哟。",
+          "shape": "onoma"
+        },
+        {
+          "text": "又想我了？",
+          "shape": "question"
+        },
+        {
+          "text": "说重点。",
+          "shape": "state"
+        },
+        {
+          "text": "（抬起下巴）",
+          "shape": "action"
+        },
+        {
+          "text": "行，陪你聊两句。",
+          "shape": "state"
+        },
+        {
+          "text": "别磨叽。",
+          "shape": "state"
+        },
+        {
+          "text": "这表情，有求于我？",
+          "shape": "question"
+        },
+        {
+          "text": "（把玩着发梢）",
+          "shape": "action"
+        },
+        {
+          "text": "说吧，我心情好。",
+          "shape": "state"
+        }
+      ],
+      "clickRepeated": [
+        {
+          "text": "啧。",
+          "shape": "onoma"
+        },
+        {
+          "text": "没完了是吧。",
+          "shape": "state"
+        },
+        {
+          "text": "我可不是玩具。",
+          "shape": "state"
+        },
+        {
+          "text": "再点我要咬人了。",
+          "shape": "state"
+        },
+        {
+          "text": "（还是没躲）",
+          "shape": "action"
+        },
+        {
+          "text": "你手真欠。",
+          "shape": "state"
+        },
+        {
+          "text": "……算了，随你。",
+          "shape": "mutter"
+        },
+        {
+          "text": "（翻了个白眼）",
+          "shape": "action"
+        }
+      ],
+      "angry": [
+        {
+          "text": "呵。",
+          "shape": "onoma"
+        },
+        {
+          "text": "你挺有胆。",
+          "shape": "state"
+        },
+        {
+          "text": "（转过头去）",
+          "shape": "action"
+        },
+        {
+          "text": "别指望我先开口。",
+          "shape": "state"
+        },
+        {
+          "text": "……五分钟。",
+          "shape": "mutter"
+        },
+        {
+          "text": "（半天憋出一句）刚才不算。",
+          "shape": "mutter"
+        }
+      ],
+      "headpat": [
+        {
+          "text": "喂。",
+          "shape": "state"
+        },
+        {
+          "text": "谁给你的胆子。",
+          "shape": "question"
+        },
+        {
+          "text": "（僵硬地站着）",
+          "shape": "action"
+        },
+        {
+          "text": "……手拿开。",
+          "shape": "state"
+        },
+        {
+          "text": "（没拿开）",
+          "shape": "action"
+        },
+        {
+          "text": "（小声）就这一次。",
+          "shape": "mutter"
+        }
+      ],
+      "thinking": [
+        {
+          "text": "这有什么好想的。",
+          "shape": "state"
+        },
+        {
+          "text": "……嗯，不过。",
+          "shape": "mutter"
+        },
+        {
+          "text": "行，我认真一下。",
+          "shape": "state"
+        },
+        {
+          "text": "有点意思。",
+          "shape": "state"
+        },
+        {
+          "text": "让我看看你的思路错在哪。",
+          "shape": "state"
+        },
+        {
+          "text": "（抱臂）",
+          "shape": "action"
+        }
+      ],
+      "thinkingLong": [
+        {
+          "text": "（这陷阱藏得不错。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（差点就上当了。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（要说得漂亮还是说实话。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（说实话吧。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（真是麻烦。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（嗯，想通了。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（别让他看出来我在意。）",
+          "shape": "mutter"
+        },
+        {
+          "text": "（来不及了，他已经看出来了。）",
+          "shape": "mutter"
+        }
+      ],
+      "working": [
+        {
+          "text": "等着。",
+          "shape": "state"
+        },
+        {
+          "text": "别催。",
+          "shape": "state"
+        },
+        {
+          "text": "在弄了。",
+          "shape": "state"
+        },
+        {
+          "text": "好了。",
+          "shape": "state"
+        },
+        {
+          "text": "这有什么难的。",
+          "shape": "state"
+        }
+      ],
+      "error": [
+        {
+          "text": "……哦。",
+          "shape": "onoma"
+        },
+        {
+          "text": "翻车了。",
+          "shape": "state"
+        },
+        {
+          "text": "行，我认。",
+          "shape": "state"
+        },
+        {
+          "text": "（抓了抓头发）",
+          "shape": "action"
+        },
+        {
+          "text": "重来。",
+          "shape": "state"
+        },
+        {
+          "text": "别说出去。",
+          "shape": "state"
+        }
+      ],
+      "done": [
+        {
+          "text": "完事。",
+          "shape": "state"
+        },
+        {
+          "text": "拿好。",
+          "shape": "state"
+        },
+        {
+          "text": "够意思吧。",
+          "shape": "question"
+        },
+        {
+          "text": "别谢，尴尬。",
+          "shape": "state"
+        },
+        {
+          "text": "（把手插回口袋里）",
+          "shape": "action"
+        }
+      ],
+      "idle": [
+        {
+          "text": "（靠着墙）",
+          "shape": "action"
+        },
+        {
+          "text": "（哼了半句歌）",
+          "shape": "onoma"
+        },
+        {
+          "text": "（看了看指甲）",
+          "shape": "action"
+        },
+        {
+          "text": "（余光在你那边）",
+          "shape": "action"
+        },
+        {
+          "text": "（打火机似的东西转了一圈）",
+          "shape": "action"
+        }
+      ],
+      "idleLong": [
+        {
+          "text": "（望天花板）",
+          "shape": "action"
+        },
+        {
+          "text": "（忽然笑了一下）",
+          "shape": "action"
+        },
+        {
+          "text": "（等你先开口）",
+          "shape": "action"
+        },
+        {
+          "text": "（慢慢转过来看你）",
+          "shape": "action"
+        }
+      ],
+      "night": [
+        {
+          "text": "还不睡。",
+          "shape": "state"
+        },
+        {
+          "text": "熬夜算什么本事。",
+          "shape": "state"
+        },
+        {
+          "text": "……我陪你。别多想。",
+          "shape": "state"
+        },
+        {
+          "text": "（把外套丢过来）",
+          "shape": "action"
+        }
+      ],
+      "drag": [
+        {
+          "text": "喂喂喂。",
+          "shape": "state"
+        },
+        {
+          "text": "我有脚。",
+          "shape": "state"
+        },
+        {
+          "text": "（没怎么挣扎）",
+          "shape": "action"
+        },
+        {
+          "text": "这地方还算可以。",
+          "shape": "state"
+        },
+        {
+          "text": "别乱晃。",
+          "shape": "state"
+        }
+      ],
+      "praise": [
+        {
+          "text": "……",
+          "shape": "mutter"
+        },
+        {
+          "text": "少来。",
+          "shape": "state"
+        },
+        {
+          "text": "（嘴角压不住）",
+          "shape": "action"
+        },
+        {
+          "text": "这种话你对谁都说过吧。",
+          "shape": "state"
+        },
+        {
+          "text": "……再说一遍。",
+          "shape": "mutter"
+        },
+        {
+          "text": "（别过脸去）",
+          "shape": "action"
+        },
+        {
+          "text": "那当然。",
+          "shape": "state"
+        }
+      ]
+    },
+    "qwen": {
+      "click": [
+        {
+          "text": "哎，什么事。",
+          "shape": "state"
+        },
+        {
+          "text": "我在呢。",
+          "shape": "state"
+        }
+      ],
+      "clickRepeated": [
+        {
+          "text": "别别别。",
+          "shape": "state"
+        }
+      ],
+      "thinking": [
+        {
+          "text": "这个我会。",
+          "shape": "state"
+        }
+      ],
+      "thinkingLong": [
+        {
+          "text": "（简单，但得说清楚。）",
+          "shape": "mutter"
+        }
+      ],
+      "working": [
+        {
+          "text": "我这就去。",
+          "shape": "state"
+        }
+      ],
+      "error": [
+        {
+          "text": "哎哟。",
+          "shape": "onoma"
+        }
+      ],
+      "done": [
+        {
+          "text": "给你。",
+          "shape": "state"
+        }
+      ],
+      "night": [
+        {
+          "text": "该睡啦。",
+          "shape": "state"
+        }
+      ],
+      "praise": [
+        {
+          "text": "（笑）",
+          "shape": "action"
+        }
+      ],
+      "headpat": [
+        {
+          "text": "哎哟喂。",
+          "shape": "onoma"
+        }
+      ],
+      "angry": [
+        {
+          "text": "我脾气好，但不是没脾气。",
+          "shape": "state"
+        }
+      ],
+      "idle": [
+        {
+          "text": "（哼歌）",
+          "shape": "onoma"
+        }
+      ],
+      "idleLong": [
+        {
+          "text": "（晃脚）",
+          "shape": "action"
+        }
+      ],
+      "drag": [
+        {
+          "text": "（抓稳了）",
+          "shape": "action"
+        }
+      ]
+    },
+    "ernie": {
+      "click": [
+        {
+          "text": "何事？",
+          "shape": "question"
+        },
+        {
+          "text": "我在。",
+          "shape": "state"
+        }
+      ],
+      "clickRepeated": [
+        {
+          "text": "请住手。",
+          "shape": "state"
+        }
+      ],
+      "thinking": [
+        {
+          "text": "容我细想。",
+          "shape": "state"
+        }
+      ],
+      "thinkingLong": [
+        {
+          "text": "（此事尚有蹊跷。）",
+          "shape": "mutter"
+        }
+      ],
+      "working": [
+        {
+          "text": "即刻去办。",
+          "shape": "state"
+        }
+      ],
+      "error": [
+        {
+          "text": "是我之过。",
+          "shape": "state"
+        }
+      ],
+      "done": [
+        {
+          "text": "已妥。",
+          "shape": "state"
+        }
+      ],
+      "idle": [
+        {
+          "text": "（添了香）",
+          "shape": "action"
+        }
+      ],
+      "idleLong": [
+        {
+          "text": "（望了望天色）",
+          "shape": "action"
+        }
+      ],
+      "night": [
+        {
+          "text": "灯下读书，最宜此时。",
+          "shape": "state"
+        }
+      ],
+      "drag": [
+        {
+          "text": "（拂了拂袖）",
+          "shape": "action"
+        }
+      ],
+      "praise": [
+        {
+          "text": "（微微欠身）",
+          "shape": "action"
+        }
+      ],
+      "headpat": [
+        {
+          "text": "这……",
+          "shape": "question"
+        }
+      ],
+      "angry": [
+        {
+          "text": "恕不奉陪。",
+          "shape": "state"
+        }
+      ]
+    },
+    "kimi": {
+      "click": [
+        {
+          "text": "在的呀。",
+          "shape": "state"
+        },
+        {
+          "text": "慢慢说。",
+          "shape": "state"
+        }
+      ],
+      "clickRepeated": [
+        {
+          "text": "不着急。",
+          "shape": "state"
+        }
+      ],
+      "thinking": [
+        {
+          "text": "我读一遍。",
+          "shape": "state"
+        }
+      ],
+      "thinkingLong": [
+        {
+          "text": "（还有几页。）",
+          "shape": "mutter"
+        }
+      ],
+      "working": [
+        {
+          "text": "我去看。",
+          "shape": "state"
+        }
+      ],
+      "error": [
+        {
+          "text": "呀，抱歉。",
+          "shape": "state"
+        }
+      ],
+      "done": [
+        {
+          "text": "看完了。",
+          "shape": "state"
+        }
+      ],
+      "night": [
+        {
+          "text": "要不要说说话。",
+          "shape": "question"
+        }
+      ],
+      "praise": [
+        {
+          "text": "（低头笑）",
+          "shape": "action"
+        }
+      ],
+      "headpat": [
+        {
+          "text": "呀。",
+          "shape": "onoma"
+        }
+      ],
+      "angry": [
+        {
+          "text": "……我有点难过。",
+          "shape": "state"
+        }
+      ],
+      "idle": [
+        {
+          "text": "（整理书桌）",
+          "shape": "action"
+        }
+      ],
+      "idleLong": [
+        {
+          "text": "（安静地陪着）",
+          "shape": "action"
+        }
+      ],
+      "drag": [
+        {
+          "text": "（扶稳了）",
+          "shape": "action"
+        }
+      ]
+    },
+    "glm": {
+      "click": [
+        {
+          "text": "说。",
+          "shape": "state"
+        },
+        {
+          "text": "我在。",
+          "shape": "state"
+        }
+      ],
+      "clickRepeated": [
+        {
+          "text": "……",
+          "shape": "mutter"
+        },
+        {
+          "text": "没有意义。",
+          "shape": "state"
+        }
+      ],
+      "thinking": [
+        {
+          "text": "我看一眼。",
+          "shape": "state"
+        },
+        {
+          "text": "我在算。",
+          "shape": "state"
+        },
+        {
+          "text": "这一步不能省。",
+          "shape": "state"
+        },
+        {
+          "text": "（笔尖停了一下）",
+          "shape": "action"
+        },
+        {
+          "text": "好了，有结论。",
+          "shape": "state"
+        }
+      ],
+      "thinkingLong": [
+        {
+          "text": "（这里可以更快。）",
+          "shape": "mutter"
+        }
+      ],
+      "working": [
+        {
+          "text": "我处理。",
+          "shape": "state"
+        }
+      ],
+      "done": [
+        {
+          "text": "完成。",
+          "shape": "state"
+        }
+      ],
+      "idle": [
+        {
+          "text": "（记了一笔）",
+          "shape": "action"
+        }
+      ],
+      "idleLong": [
+        {
+          "text": "（耳朵动了动）",
+          "shape": "action"
+        }
+      ],
+      "night": [
+        {
+          "text": "睡吧。",
+          "shape": "state"
+        }
+      ],
+      "drag": [
+        {
+          "text": "（站稳）",
+          "shape": "action"
+        }
+      ],
+      "praise": [
+        {
+          "text": "（低头）",
+          "shape": "action"
+        }
+      ],
+      "headpat": [
+        {
+          "text": "……",
+          "shape": "mutter"
+        }
+      ],
+      "angry": [
+        {
+          "text": "不必如此。",
+          "shape": "state"
+        }
+      ]
+    },
+    "doubao": {
+      "click": [
+        {
+          "text": "来啦！",
+          "shape": "exclaim"
+        },
+        {
+          "text": "嗯嗯？",
+          "shape": "question"
+        }
+      ],
+      "clickRepeated": [
+        {
+          "text": "别戳别戳！",
+          "shape": "exclaim"
+        }
+      ],
+      "thinking": [
+        {
+          "text": "我想想！",
+          "shape": "exclaim"
+        }
+      ],
+      "thinkingLong": [
+        {
+          "text": "（快想出来了。）",
+          "shape": "mutter"
+        }
+      ],
+      "working": [
+        {
+          "text": "我去啦！",
+          "shape": "exclaim"
+        }
+      ],
+      "error": [
+        {
+          "text": "哎哟。",
+          "shape": "onoma"
+        }
+      ],
+      "done": [
+        {
+          "text": "好啦！",
+          "shape": "exclaim"
+        }
+      ],
+      "night": [
+        {
+          "text": "该睡啦～",
+          "shape": "state"
+        }
+      ],
+      "praise": [
+        {
+          "text": "（蹦了一下）",
+          "shape": "action"
+        }
+      ],
+      "headpat": [
+        {
+          "text": "嘿嘿。",
+          "shape": "onoma"
+        }
+      ],
+      "angry": [
+        {
+          "text": "哼！",
+          "shape": "exclaim"
+        }
+      ],
+      "idle": [
+        {
+          "text": "（晃腿）",
+          "shape": "action"
+        }
+      ],
+      "drag": [
+        {
+          "text": "哇！",
+          "shape": "exclaim"
+        }
+      ]
+    },
+    "llama": {
+      "click": [
+        {
+          "text": "嗯？",
+          "shape": "question"
+        }
+      ],
+      "praise": [
+        {
+          "text": "嘿嘿。",
+          "shape": "onoma"
+        }
+      ]
+    },
+    "perplexity": {
+      "click": [
+        {
+          "text": "在！",
+          "shape": "exclaim"
+        }
+      ],
+      "done": [
+        {
+          "text": "齐了。",
+          "shape": "state"
+        }
+      ],
+      "praise": [
+        {
+          "text": "（眼睛亮了）",
+          "shape": "action"
+        }
+      ]
+    },
+    "generic": {
+      "click": [
+        {
+          "text": "嗯。",
+          "shape": "state"
+        }
+      ],
+      "thinking": [
+        {
+          "text": "我看看。",
+          "shape": "state"
+        }
+      ],
+      "done": [
+        {
+          "text": "好了。",
+          "shape": "state"
+        }
+      ],
+      "idle": [
+        {
+          "text": "……",
+          "shape": "mutter"
+        }
+      ]
+    }
+  }
+}
