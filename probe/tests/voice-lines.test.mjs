@@ -320,3 +320,32 @@ test('feed：stats 是累计账本，pushed 与 rejected 加起来对得上候�
   assert.equal(stats.pushed, before + pushed.length)
   assert.equal(stats.rejected.technical, 1)
 })
+
+test('游标比队列还靠前（插件重载/宿主重启）时自愈，不会永久停住', async () => {
+  // 用户 2026-10-25 实测：「停在一个会话里，几分钟后头顶气泡就不说话了，切到别的会话才恢复」。
+  // 根因：插件重载把 feed 的 seq 归零，浏览器还拿着旧的大游标，id > from 永远不成立。
+  const feed = createLineFeed({ minGapMs: 0, dedupeWindowMs: 0 })
+  feed.push('s1', '第一句')
+  feed.push('s1', '第二句')
+  const first = feed.read('s1', 0)
+  assert.equal(first.lines.length, 2)
+
+  // 模拟「浏览器拿着旧的巨大游标来问」：不能回空游标（否则死循环），要对齐到队尾。
+  const healed = feed.read('s1', 9999)
+  assert.deepEqual(healed.lines, [], '过期游标不重放旧句')
+  assert.equal(healed.cursor, 2, '游标应被对齐到当前队尾')
+
+  // 对齐之后再推一句，用自愈后的游标必须能读到。
+  feed.push('s1', '第三句')
+  const next = feed.read('s1', healed.cursor)
+  assert.equal(next.lines.length, 1)
+  assert.equal(next.lines[0].text.includes('第三句'), true)
+})
+
+test('过期游标不会让长轮询白等满超时', async () => {
+  const feed = createLineFeed({ minGapMs: 0, dedupeWindowMs: 0 })
+  feed.push('s2', '一句')
+  const startedAt = Date.now()
+  await feed.wait('s2', 9999, 5000)
+  assert.ok(Date.now() - startedAt < 1000, '过期游标应立即返回，不能等满 5 秒')
+})
