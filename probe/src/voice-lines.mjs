@@ -614,8 +614,16 @@ export function createLineFeed(options = {}) {
      */
     read(sessionId, cursor) {
       const bucket = buckets.get(typeof sessionId === 'string' ? sessionId : '')
-      if (!bucket) return { cursor: Number.isInteger(cursor) ? cursor : 0, lines: [] }
+      if (!bucket) return { cursor: 0, lines: [] }
       const from = Number.isInteger(cursor) && cursor >= 0 ? cursor : 0
+      // 游标比队列还靠前 = 游标是上一代 feed 留下的（插件重载、宿主重启都会让 seq 归零），
+      // 这时 `id > from` 永远不成立，气泡会**无声永久停住**，只有切会话（客户端把 cursor
+      // 重置成 0）才恢复 —— 用户 2026-10-25 报的「几分钟后就不说话了」正是这个。
+      // 处理方式：把游标对齐到队尾，不重放旧句（重放会一次灌 40 条）。
+      if (from > bucket.seq) {
+        bucket.lastCursor = bucket.seq
+        return { cursor: bucket.seq, lines: [] }
+      }
       const lines = bucket.items.filter((item) => item.id > from)
       // 读一次 = 到 cursor 为止的句子浏览器都拿到了，队列清空（pending 的语义）。
       bucket.lastCursor = bucket.seq
@@ -653,6 +661,9 @@ export function createLineFeed(options = {}) {
       // 否则卡片垫句的"队列必须空"闸门会被一次超时白送。
       const probe = buckets.get(typeof sessionId === 'string' ? sessionId : '')
       const from = Number.isInteger(cursor) && cursor >= 0 ? cursor : 0
+      // 游标过期（见 read 里的同类判断）：立刻返回，让 read 去做自愈对齐，
+      // 别让浏览器在这里白等满一个超时周期（用户体感就是"卡住十几秒"）。
+      if (probe && from > probe.seq) return Promise.resolve()
       if (probe && probe.items.some((item) => item.id > from)) return Promise.resolve()
       const key = typeof sessionId === 'string' ? sessionId : ''
       const ms = Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.min(timeoutMs, 15000) : 0
