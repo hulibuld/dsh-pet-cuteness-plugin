@@ -1,6 +1,6 @@
 {
   "name": "dsh-pet-cuteness-plugin",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "dsh-pet 的附属插件（不能单独运行）：按模型套用二次元人格、思维链中文化、台词与日记，让右下角那只鲸鱼娘有话说。",
   "type": "module",
   "main": "index.js",
