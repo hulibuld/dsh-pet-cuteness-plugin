@@ -1508,3 +1508,41 @@ test('台词长轮询带三道自我修复：过期游标、fetch 兜底超时�
   assert.match(src, /const watchdog = setInterval/)
   assert.match(src, /clearInterval\(watchdog\)/)
 })
+
+test('设置页：/pet 已捎带亲密度与小鱼干时，点开必须直接显示（曾经永远停在「正在读」）', async () => {
+  let affinityReads = 0
+  let treatsReads = 0
+  const page = await renderSettingsPage({
+    manualRestore: true,
+    pet: (url) => {
+      if (url.includes('/pet/affinity')) {
+        affinityReads += 1
+        return jsonResponse({ ok: true, value: { points: 1, max: 999999 } })
+      }
+      if (url.includes('/pet/treats')) {
+        treatsReads += 1
+        return jsonResponse({ ok: true, value: { treats: 1, max: 999 } })
+      }
+      // 新版 /pet 会把两串数字一起带回来——正是这条路径曾经让「展开」什么都不读。
+      return jsonResponse({
+        ok: true,
+        value: {
+          installed: true,
+          enabled: true,
+          affinity: { points: 4321, max: 999999999 },
+          treats: { treats: 7, max: 999 },
+        },
+      })
+    },
+  })
+  await page.settle(50)
+  assert.equal(affinityReads, 0, '收起态不许读')
+  assert.equal(treatsReads, 0, '收起态不许读')
+  await page.click('亲密度')
+  const text = page.latestText()
+  assert.match(text, /现在是 4321/, '/pet 里带来的点数必须直接显示，不能停在「正在读」')
+  assert.match(text, /现在有 7/, '/pet 里带来的小鱼干也必须直接显示')
+  assert.doesNotMatch(text, /正在读她和挂件的状态/, '不许永远停在读取中')
+  assert.equal(affinityReads, 0, '已经有现成数据就不该再多打一次 /pet/affinity')
+  page.dispose()
+})
