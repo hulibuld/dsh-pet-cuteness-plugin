@@ -1493,3 +1493,18 @@ function collectInputs(nodes, out) {
   }
   return acc
 }
+
+/* ---------------- 台词拉取的自我修复（2026-10-25 用户实测「几分钟后停住」） ---------------- */
+
+test('台词长轮询带三道自我修复：过期游标、fetch 兜底超时、循环看门狗', () => {
+  const src = readFileSync(new URL('../scripts/build-client.mjs', import.meta.url), 'utf8')
+  // ① 兜底超时：长轮询最多等 8 秒，挂住就 abort，否则永不排下一次。
+  assert.match(src, /LINES_POLL_WAIT_MS \+ 5000/)
+  assert.match(src, /controller\.abort\(\)/)
+  // ② 超时/中断后把游标退回 0，重下一次 poll 能重新对齐。
+  assert.match(src, /cursorRef\.current = 0/)
+  // ③ 看门狗：循环自己死了（定时器没排上）也能被拉起来。
+  assert.match(src, /const LINES_WATCHDOG_MS = 25000/)
+  assert.match(src, /const watchdog = setInterval/)
+  assert.match(src, /clearInterval\(watchdog\)/)
+})
