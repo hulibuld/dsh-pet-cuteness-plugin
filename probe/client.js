@@ -858,6 +858,10 @@ window.__ModuleLoader__.load({
 		// 页面不可见时的轮询间隔（只做还活着的心跳，不真发请求）
 		const HIDDEN_POLL_MS = 4000
 		const LINES_POLL_WAIT_MS = 8000
+		// 看门狗：25 秒还没有任何一次轮询跑完，就当循环死了，重新拉起来。
+		// 为什么需要：fetch 兜底超时只管住「请求挂住」，管不住「下一次 setTimeout 根本没排上」
+		// （某个 then 里抛了异常、或定时器被别的路径清掉）——那种情况下气泡会无声停死。
+		const LINES_WATCHDOG_MS = 25000
 		const LINES_SHOW_MS = 3200
 		const LINES_QUEUE_MAX = 10
 		// 台词开着时的长轮询间隔：一次问完立刻问下一次（宿主那边 wait 会挡住 8 秒）。
@@ -1554,11 +1558,24 @@ window.__ModuleLoader__.load({
 		        .then(() => {
 		          if (failSafe) clearTimeout(failSafe)
 		          if (stopped) return
+		          lastTickAt = Date.now()
 		          // 关掉台词时宿主立刻回空：旧代码固定 400ms 再问，等于每秒 2.5 个空请求。
 		          // 现在按结局退避（关着 ≥3s、出错 2s 起翻倍、宿主没准备好 5s）。
 		          timer = setTimeout(poll, nextLinesDelay(outcome, backoffRef.current))
 		        })
 		    }
+		    // 看门狗：兜住「循环自己死了」。只在真的超过 LINES_WATCHDOG_MS 没动静时才动，
+		    // 正常轮询（8 秒一次）永远不会触发它，不会变成额外的请求源。
+		    let lastTickAt = Date.now()
+		    const watchdog = setInterval(() => {
+		      if (stopped) return
+		      if (Date.now() - lastTickAt < LINES_WATCHDOG_MS) return
+		      if (timer) {
+		        clearTimeout(timer)
+		        timer = 0
+		      }
+		      poll()
+		    }, 5000)
 		    // 用户在开关里把台词打开：叫醒可能正睡 15 秒的定时器，立刻重问一次。
 		    const wake = () => {
 		      if (stopped) return
@@ -1573,6 +1590,7 @@ window.__ModuleLoader__.load({
 		    return () => {
 		      stopped = true
 		      if (timer) clearTimeout(timer)
+		      clearInterval(watchdog)
 		      if (linesControl.wake === wake) linesControl.wake = null
 		    }
 		  }, [sessionId])
