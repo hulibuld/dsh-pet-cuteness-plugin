@@ -1141,10 +1141,25 @@ window.__ModuleLoader__.load({
 		function measureNeighborOffset(scale) {
 		  try {
 		    if (typeof document === 'undefined') return PET_ANCHOR_OFFSET_Y
-		    const node = document.querySelector('[class*="bubbleAnchor"]')
-		    if (node && node.childElementCount > 0) {
-		      return Math.round(44 * Math.max(0.5, finiteOr(scale, 1)))
+		    const root = document.querySelector('div[data-dsh-pet-root]')
+		    if (!root) return PET_ANCHOR_OFFSET_Y
+		    // dsh-pet 的气泡用的是 CSS Module 类名（...bubble、bubbleUsage 这些），
+		    // 老代码查的 bubbleAnchor 在它的 DOM 里根本不存在，所以从来没让开过。
+		    // 现在按真实类名找，取「所有可见气泡里最高的那条边」当邻居的上沿。
+		    const sprite = measureSprite()
+		    if (!sprite) return PET_ANCHOR_OFFSET_Y
+		    let topEdge = null
+		    const nodes = root.querySelectorAll('[class*="bubble"]')
+		    for (let i = 0; i < nodes.length; i += 1) {
+		      const rect = nodes[i].getBoundingClientRect()
+		      if (!(finiteOr(rect.width, 0) > 1) || !(finiteOr(rect.height, 0) > 1)) continue
+		      if (rect.bottom > sprite.top + 2) continue // 在立绘里面的（点击热区之类）不算
+		      if (topEdge === null || rect.top < topEdge) topEdge = rect.top
 		    }
+		    if (topEdge === null) return PET_ANCHOR_OFFSET_Y
+		    // 让到人家气泡上面：距离 = 立绘上沿到它上沿 + 一点缝，再按比例缩放。
+		    const gap = Math.round((sprite.top - topEdge + 6) * Math.max(0.5, finiteOr(scale, 1)))
+		    return Math.max(PET_ANCHOR_OFFSET_Y, gap)
 		  } catch {
 		    /* 读不到就按默认间隙 */
 		  }
@@ -1251,15 +1266,9 @@ window.__ModuleLoader__.load({
 		    // 贵操作只在"真的要提交"时做：getComputedStyle 会强制样式/布局同步，
 		    // 气泡显示期间每帧做一次，恰好会拖累 dsh-pet 自己的跟手（体感审 F4）。
 		    // 再各带一层缓存：offsetY 只跟 bubbleScale 走；frame 只跟锚点容器走。
-		    let cachedOffset = null
-		    let cachedOffsetScale = null
-		    const neighborOffset = (scale) => {
-		      const key = finiteOr(scale, 1)
-		      if (cachedOffset !== null && cachedOffsetScale === key) return cachedOffset
-		      cachedOffset = measureNeighborOffset(scale)
-		      cachedOffsetScale = key
-		      return cachedOffset
-		    }
+		    // 不做缓存：pet 的气泡是"点一下出现、几秒后消失"，按 scale 缓存会让气泡一直让在旧位置。
+		    // 这个测量只在 commit（节流后 ≤8 次/秒）里发生，成本可接受（不走 getComputedStyle）。
+		    const neighborOffset = (scale) => measureNeighborOffset(scale)
 		    let cachedFrame = null
 		    let cachedFrameHost = null
 		    const resolveFrame = () => {
@@ -1491,7 +1500,20 @@ window.__ModuleLoader__.load({
 		      // 一份"说不清形状"的回包（ok:false、字段改名）不能算 null——null 会退到 5 秒，
 		      // 用户看到的就是「半天不出词」。{unknown:true} → 800ms 重问。
 		      let outcome = null
-		      fetch(url, { method: 'GET' })
+		      // 兜底超时：长轮询本身最多等 8 秒，若连接被中间层吃掉（代理、休眠唤醒），
+		      // fetch 会一直挂着 —— 挂住就再也不会排下一次 poll，气泡"无声停住"。
+		      // 用户 2026-10-25 报的「几分钟后就不说话了」，这条是第二道保险。
+		      const controller = typeof AbortController === 'function' ? new AbortController() : null
+		      const failSafe = controller
+		        ? setTimeout(() => {
+		            try {
+		              controller.abort()
+		            } catch {
+		              /* 已经结束了 */
+		            }
+		          }, LINES_POLL_WAIT_MS + 5000)
+		        : 0
+		      fetch(url, controller ? { method: 'GET', signal: controller.signal } : { method: 'GET' })
 		        .then((response) => response.json())
 		        .then((payload) => {
 		          if (stopped) return
@@ -1521,8 +1543,11 @@ window.__ModuleLoader__.load({
 		        })
 		        .catch(() => {
 		          outcome = { error: true }
+		          // 超时/中断过：游标可能已经跟宿主对不上，退回 0 从头对齐（宿主那边也会自愈）。
+		          cursorRef.current = 0
 		        })
 		        .then(() => {
+		          if (failSafe) clearTimeout(failSafe)
 		          if (stopped) return
 		          // 关掉台词时宿主立刻回空：旧代码固定 400ms 再问，等于每秒 2.5 个空请求。
 		          // 现在按结局退避（关着 ≥3s、出错 2s 起翻倍、宿主没准备好 5s）。
