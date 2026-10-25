@@ -468,7 +468,7 @@ async function writePetNumber(ctx, spec) {
     return { ok: false, code: 'backup-failed', message: '备份挂件状态失败，没敢往下写：' + String(error?.message ?? error) }
   }
 
-  // ② 原子写：先写临时文件再 rename，避免写到一半被读到半截 JSON。
+  // ③ 原子写：先写临时文件再 rename，避免写到一半被读到半截 JSON。
   const tmp = file + '.tmp-' + String(process.pid)
   try {
     writeFileSync(tmp, next.text, 'utf8')
@@ -487,11 +487,12 @@ async function writePetNumber(ctx, spec) {
     return { ok: false, code: 'write-failed', message: '写挂了：' + String(error?.message ?? error) }
   }
 
-  // ③ 让它真的接住新值：内存已经是这个数就什么都不用做；不是就重载挂件再验。
-  //    「只是文件改了、内存没改」必须当失败——否则用户下次看到它又变回去。
+  // ③ 让挂件内存接住新值；接不住就重载它（此时文件已是新值，重载才读得到）。
+  //    顺序不能反：先改内存再写文件的话，重载这一步会读到旧文件，白费。
   const adopted = typeof spec.live === 'function' ? await adoptLiveNumber(ctx, spec.live, value, spec.kind) : 'live'
 
-  // ④ 回读核对：文件里的值必须等于我们要的值，否则回滚。
+
+  // ④ 回读核对：文件与挂件内存都得等于目标值，否则回滚。
   let after = ''
   try {
     after = readFileSync(file, 'utf8')
