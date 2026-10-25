@@ -2741,6 +2741,19 @@ window.__ModuleLoader__.load({
 		      .then((value) => {
 		        if (!alive) return
 		        setPet(value && typeof value === 'object' ? value : { installed: false, enabled: false })
+		        // /pet 顺手带回来的两串数字先填上：点开「亲密度」时立刻能看见，
+		        // 不用等第二个来回（原来这里是空着等 load()，而 load() 又只在
+		        // 「/pet 没带数据」时才被叫——结果就是永远停在「正在读」）。
+		        if (value && value.affinity && typeof value.affinity.points === 'number') {
+		          const points = clampInt(value.affinity.points, 0, AFFINITY_MAX)
+		          setView({ points: points })
+		          setDraft(String(points))
+		        }
+		        if (value && value.treats && typeof value.treats.treats === 'number') {
+		          const amount = clampInt(value.treats.treats, 0, TREATS_MAX)
+		          setTreats({ treats: amount })
+		          setTreatsDraft(String(amount))
+		        }
 		      })
 		      .catch(() => {
 		        if (alive) setPet({ installed: false, enabled: false, unknown: true })
@@ -2795,8 +2808,11 @@ window.__ModuleLoader__.load({
 		  const toggle = () => {
 		    const next = !open
 		    setOpen(next)
-		    // 第一次展开才去读：默认关着的时候不能有请求。
-		    if (next && (!pet || (!pet.affinity && !pet.treats))) load()
+		    // 展开就读一次（默认关着时零请求，这是用户硬要求）。
+		    // 这里**不能**写成「/pet 里带了数据就不读」：那种写法一旦 /pet 先回来，
+		    // 点开就再也没人调 load()，界面永远停在「正在读」（2026-10-25 用户实测）。
+		    // load() 内部优先吃 /pet 里现成的那份，所以不会多打一次网络。
+		    if (next && (!view || !treats)) load()
 		  }
 
 		  const apply = (target) => {
@@ -2997,7 +3013,18 @@ window.__ModuleLoader__.load({
 		      },
 		      open ? '收起亲密度' : '亲密度（默认收起，想改就点这里）',
 		    ),
-		    open && !view && !error && !treats ? line('正在读她和挂件的状态…') : null,
+		    open && !view && !error && !treats
+		      ? h(
+		          'div',
+		          { style: { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 } },
+		          line('正在读她和挂件的状态…'),
+		          h(
+		            'button',
+		            { type: 'button', onClick: load, style: Object.assign({}, UI_BUTTON, { fontSize: FONT_XS }) },
+		            '重新读取',
+		          ),
+		        )
+		      : null,
 		    open && error ? line(error, 'bad') : null,
 		    open && view
 		      ? h(
