@@ -13,12 +13,20 @@
 ## 安装
 
 ```sh
-npm i dsh-pet-cuteness-plugin
+npm i dsh-pet-cuteness-plugin@latest
 ```
 
 然后在 DSH 的插件管理器里启用。它会自动用上已装的 `@linxin666/dsh-pet`。
 
-当前版本：**0.2.1**（[CHANGELOG](probe/CHANGELOG.md)）
+> **如果你在插件管理器里装的时候看到「这个包没有声明组合包，无法作为插件安装」**：
+> 多半是装到了早期的占位版本 `dsh-pet-cuteness-plugin@0.0.0-stage`（那一版还没有
+> `dsh.bundle` 声明；当前唯一一个缺这个声明的版本）。请指定 `@latest` 或写死版本号 `@0.2.1` 以上再装；
+> 从 `probe/` 目录 `link:` 进 profile 也可以（本地开发就是这么用的）。
+
+> 不要用 `npm i github:hulibuld/dsh-pet-cuteness-plugin` 安装：npm 包根在 `probe/`
+> 子目录，仓库根没有 `package.json`，从 git 装会找不到包。
+
+当前版本：**0.2.2**（仓库内；npm 上最新正式版 0.2.1）。见 [CHANGELOG](probe/CHANGELOG.md)。
 
 ## 用法与常见问题
 
