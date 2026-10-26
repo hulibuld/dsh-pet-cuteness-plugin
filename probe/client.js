@@ -2683,7 +2683,7 @@ window.__ModuleLoader__.load({
 		// 小鱼干的白话文案（错误码与亲密度那套同构，但文案不同，别共用一个表）。
 		const TREATS_PROBLEM = {
 		  'no-pet': '还没装挂件，装好之后这里才能改',
-		  'bad-treats': '小鱼干要填 0 到 ' + TREATS_MAX + ' 之间的整数',
+		  'bad-treats': '小鱼干填不下那么多：填 0 到挂件允许的上限之间的整数',
 		  'bad-body': '这边发过去的格式不对（内部错误，刷新页面再试）',
 		  'reload-unavailable': '改不动：挂件现在没在重载状态，直接改文件会被它下一次保存盖掉。这次什么都没写入',
 		  'verify-failed': '写进去了但回读对不上，已经还原成原来的数字',
@@ -2707,6 +2707,18 @@ window.__ModuleLoader__.load({
 		  if (n < min) return min
 		  if (n > max) return max
 		  return n
+		}
+
+		/**
+		 * 小鱼干的**真实**上限。
+		 *
+		 * 为什么不直接用 999：999 是用户想要的口径，但挂件自己只允许囤它的 treats.max 个
+		 * （默认 20，见 pet 的 defaultTreatConfig.maxTreats）。界面按 999 放行，
+		 * 用户填完只会被挂件夹回 20——看着像"改了不生效"。所以以挂件报的数为准。
+		 */
+		function treatsCapOf(source) {
+		  const reported = source && typeof source === 'object' && typeof source.max === 'number' ? source.max : NaN
+		  return isFinite(reported) && reported > 0 ? clampInt(reported, 1, TREATS_MAX) : TREATS_MAX
 		}
 
 		/**
@@ -2750,8 +2762,9 @@ window.__ModuleLoader__.load({
 		          setDraft(String(points))
 		        }
 		        if (value && value.treats && typeof value.treats.treats === 'number') {
-		          const amount = clampInt(value.treats.treats, 0, TREATS_MAX)
-		          setTreats({ treats: amount })
+		          const cap = treatsCapOf(value.treats)
+		          const amount = clampInt(value.treats.treats, 0, cap)
+		          setTreats({ treats: amount, max: cap })
 		          setTreatsDraft(String(amount))
 		        }
 		      })
@@ -2769,8 +2782,9 @@ window.__ModuleLoader__.load({
 		      .then((value) => {
 		        if (!value || typeof value !== 'object') return
 		        if (typeof value.treats !== 'number') return
-		        const amount = clampInt(value.treats, 0, TREATS_MAX)
-		        setTreats({ treats: amount })
+		        const cap = treatsCapOf(value)
+		        const amount = clampInt(value.treats, 0, cap)
+		        setTreats({ treats: amount, max: cap })
 		        setTreatsDraft(String(amount))
 		      })
 		      .catch(() => {
@@ -2798,8 +2812,10 @@ window.__ModuleLoader__.load({
 		    }
 		    // 小鱼干：优先用 /pet 里带的，拿不到再单读一份。
 		    if (pet && pet.treats && typeof pet.treats === 'object' && typeof pet.treats.treats === 'number') {
-		      setTreats({ treats: clampInt(pet.treats.treats, 0, TREATS_MAX) })
-		      setTreatsDraft(String(clampInt(pet.treats.treats, 0, TREATS_MAX)))
+		      const cap = treatsCapOf(pet.treats)
+		      const amount = clampInt(pet.treats.treats, 0, cap)
+		      setTreats({ treats: amount, max: cap })
+		      setTreatsDraft(String(amount))
 		    } else {
 		      readTreats()
 		    }
@@ -2837,8 +2853,10 @@ window.__ModuleLoader__.load({
 		        setDraft(String(points))
 		        setNotice(
 		          applied === 'pending-restart'
-		            ? '已写入，重启 App 后生效（挂件现在没在重载状态，热改不了）'
-		            : '已改好，她那边现在就是 ' + points + ' 了',
+		            ? '已写入，重启 App 后生效（挂件这一版没开放热重载）'
+		            : applied === 'reloaded'
+		              ? '已改好，还顺手让她重载了一次，现在就是 ' + points + ' 了'
+		              : '已改好，她那边现在就是 ' + points + ' 了',
 		        )
 		      })
 		      .catch((err) => {
@@ -2856,17 +2874,18 @@ window.__ModuleLoader__.load({
 		      setTreatsError(TREATS_PROBLEM['bad-treats'])
 		      return
 		    }
-		    // 同样：超 999 先在本地夹住，不发非法值。
+		    // 同样：超上限先在本地夹住，不发非法值。上限以挂件为准（它可能只让囤 20）。
+		    const cap = treatsCapOf(treats)
 		    let next = Math.round(suspect)
 		    if (next < 0) next = 0
-		    if (next > TREATS_MAX) next = TREATS_MAX
+		    if (next > cap) next = cap
 		    setTreatsBusy(true)
 		    setTreatsError('')
 		    setTreatsNotice('')
 		    bridgeRequest('/pet/treats', { treats: next }, { timeoutMs: 12000 })
 		      .then((value) => {
-		        const amount = value && typeof value.treats === 'number' ? clampInt(value.treats, 0, TREATS_MAX) : next
-		        setTreats({ treats: amount })
+		        const amount = value && typeof value.treats === 'number' ? clampInt(value.treats, 0, cap) : next
+		        setTreats({ treats: amount, max: cap })
 		        setTreatsDraft(String(amount))
 		        setTreatsNotice('已改好，她那边现在有 ' + amount + ' 条小鱼干')
 		      })
@@ -3107,8 +3126,8 @@ window.__ModuleLoader__.load({
 		                  '现在有 ',
 		                  h('b', null, String(treats.treats)),
 		                  ' / ',
-		                  String(TREATS_MAX),
-		                  '（最多 ' + TREATS_MAX + ' 条）',
+		                  String(treatsCapOf(treats)),
+		                  '（最多 ' + treatsCapOf(treats) + ' 条，这个上限是挂件自己定的，不是我们改的）',
 		                ),
 		                h(
 		                  'div',

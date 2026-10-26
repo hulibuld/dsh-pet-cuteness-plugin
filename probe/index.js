@@ -243,6 +243,187 @@ function probePet(ctx) {
   return { installed: true, enabled }
 }
 
+
+/**
+ * 挂件**内存里**现在是多少（不是 pet.json 里）。
+ *
+ * 为什么必须看内存：`PetService` 构造时读一次 pet.json，之后一律拿内存快照 `flush()` 整个覆盖回去。
+ * 只改文件不改内存，用户就会看到"改了→过一会儿自己变回去"（2026-10-26 实撞：文件写 123456，
+ * `/api/pet/state` 里还是 415）。所以判断"有没有生效"的唯一可信口径是内存。
+ *
+ * @returns {object|null} `PetService#state()` 的返回；拿不到就是 null
+ */
+function livePetView(ctx) {
+  let pet = null
+  try {
+    pet = ctx.get('pet', false)
+  } catch {
+    return null
+  }
+  if (!pet || typeof pet.state !== 'function') return null
+  try {
+    const view = pet.state()
+    return view && typeof view === 'object' ? view : null
+  } catch {
+    return null
+  }
+}
+
+/** 内存里的亲密度；拿不到回 null。 */
+function livePoints(ctx) {
+  const view = livePetView(ctx)
+  const points = view && view.affinity ? Number(view.affinity.points) : NaN
+  return Number.isFinite(points) ? points : null
+}
+
+/**
+ * 内存里的小鱼干数量；拿不到回 null。
+ *
+ * 注意挂件的字段叫 `stocked`（不是 `treats`）——`treats.treats` 只存在于 pet.json 里，
+ * 内存视图里它被改名成了 `stocked`，两个名字都踩过才写在这里。
+ */
+function liveTreats(ctx) {
+  const view = livePetView(ctx)
+  const stocked = view && view.treats ? Number(view.treats.stocked) : NaN
+  return Number.isFinite(stocked) ? stocked : null
+}
+
+/** 挂件自己允许囤多少小鱼干（它的 `treats.max`，默认 20）；拿不到回 null。 */
+function liveTreatsMax(ctx) {
+  const view = livePetView(ctx)
+  const max = view && view.treats ? Number(view.treats.max) : NaN
+  return Number.isFinite(max) && max > 0 ? max : null
+}
+
+/**
+ * 直接改挂件**内存**里的那个数，然后让它自己存一次盘。
+ *
+ * 为什么走内存而不是只改文件：`PetService` 只在构造时读 pet.json，之后一律拿内存快照
+ * `flush()` 整个覆盖回去——只改文件等于白改（2026-10-26 实测：文件 123456，界面还是 415）。
+ *
+ * 为什么不新增「官方 setter」：挂件没开放改亲密度/小鱼干的接口（`setEnabled`/`setName`
+ * 那些有，这两个没有）。所以这里退一步，改它自己的 `ledger.snapshot` 再调它自己的
+ * `flush()`——等于替它做一次它内部本来也会做的写入。全程 try/catch + 读回校验，
+ * 拿不到内部结构就返回 false，交给调用方走「重载」或「回滚」，不硬闯。
+ *
+ * @param {any} ctx
+ * @param {'points'|'treats'} kind
+ * @param {number} value
+ * @returns {boolean} 是否真的改到了内存
+ */
+function applyLiveNumber(ctx, kind, value) {
+  let pet = null
+  try {
+    pet = ctx.get('pet', false)
+  } catch {
+    return false
+  }
+  const ledger = pet && pet.ledger
+  const snapshot = ledger && ledger.snapshot
+  if (!snapshot) return false
+  try {
+    if (kind === 'points') {
+      if (!snapshot.affinity || typeof snapshot.affinity !== 'object') return false
+      snapshot.affinity.points = value
+    } else {
+      if (!snapshot.treats || typeof snapshot.treats !== 'object') {
+        // 老版本的扁皮形状：treats 直接是数字。
+        if (typeof snapshot.treats !== 'number') return false
+        snapshot.treats = value
+      } else {
+        snapshot.treats.treats = value
+      }
+    }
+    // 让它把内存快照落盘：下一次 flush 才不会把我们刚写的值盖回去。
+    if (typeof pet.flush === 'function') pet.flush()
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 让挂件**重新读一次 pet.json**。
+ *
+ * 走过的弯路（别再走一遍）：
+ *   - `pluginManager.reload(['pet'])` 不走这条路：它内部靠 `hmr.reconcileProfile` 比对磁盘模块，
+ *     只重载「文件改过的模块」，返回的是 `{warnings, restartReason}` 而不是 id 数组。拿它当
+ *     "重载成功"的判断永远是 false（旧代码就是这么错的）。
+ *   - 没有 HMR 时它连重载都不做，只 compose 一遍就返回。
+ * 真正能用的入口是 cordis 每个插件自己的 fiber：`Fiber#restart()` =
+ * 「dispose 之后用当前 config 立刻重新加载」。从 `loader.entries()` 里找到挂件那一条即可。
+ *
+ * @returns {Promise<boolean>} 是否真的重载了
+ */
+async function restartPetPlugin(ctx) {
+  const loader = (() => {
+    try {
+      return ctx.get('loader', false) || ctx.loader
+    } catch {
+      return null
+    }
+  })()
+  if (!loader || typeof loader.entries !== 'function') return false
+  let entries = []
+  try {
+    entries = [...loader.entries()]
+  } catch {
+    return false
+  }
+  for (const entry of entries) {
+    const id = String((entry && entry.options && entry.options.id) || (entry && entry.id) || '')
+    if (id !== 'pet') continue
+    const fiber = entry && entry.fiber
+    if (!fiber || typeof fiber.restart !== 'function') continue
+    try {
+      await fiber.restart()
+      return true
+    } catch (error) {
+      // 重载失败不能当成"写成功"：调用方会回滚文件，用户至少不会被骗。
+      return false
+    }
+  }
+  return false
+}
+
+/**
+ * 判断写进去的值有没有真的被挂件接住，没接住就让它重载一次再验。
+ *
+ * @param {any} ctx
+ * @param {() => number|null} readLive 读内存当前值
+ * @param {number} value 目标值
+ * @returns {Promise<'live'|'reloaded'|'stale'>}
+ */
+async function adoptLiveNumber(ctx, readLive, value, kind = 'points') {
+  let live = null
+  try {
+    live = readLive(ctx)
+  } catch {
+    live = null
+  }
+  // 读不到内存（老版本挂件没有 state()、或此刻没装）：文件已经写成目标值，
+  // 它下次启动会从文件读——这是「重启后生效」，不是失败。
+  if (live === null) return 'pending-restart'
+  if (live === value) return 'live'
+
+  // 第一选择：直接改内存 + 让它自己存盘。比重新挂载整个挂件轻，也不会让她闪一下。
+  if (applyLiveNumber(ctx, kind, value)) {
+    for (let i = 0; i < 10; i += 1) {
+      if (readLive(ctx) === value) return 'live'
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    }
+  }
+
+  const restarted = await restartPetPlugin(ctx)
+  if (!restarted) return 'stale'
+  // 重载是异步的，给它一口气把服务重新建起来
+  for (let i = 0; i < 20; i += 1) {
+    if (readLive(ctx) === value) return 'reloaded'
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  return 'stale'
+}
+
 /**
  * 把亲密度写进 `pet.json`，并让它重新加载。
  *
@@ -287,7 +468,7 @@ async function writePetNumber(ctx, spec) {
     return { ok: false, code: 'backup-failed', message: '备份挂件状态失败，没敢往下写：' + String(error?.message ?? error) }
   }
 
-  // ② 原子写：先写临时文件再 rename，避免写到一半被读到半截 JSON。
+  // ③ 原子写：先写临时文件再 rename，避免写到一半被读到半截 JSON。
   const tmp = file + '.tmp-' + String(process.pid)
   try {
     writeFileSync(tmp, next.text, 'utf8')
@@ -306,26 +487,12 @@ async function writePetNumber(ctx, spec) {
     return { ok: false, code: 'write-failed', message: '写挂了：' + String(error?.message ?? error) }
   }
 
-  // ③ 让它重新加载。没有 HMR 时 reload 返回 []，按失败回滚。
-  let applied = 'pending-restart'
-  let reloadError = ''
-  const manager = (() => {
-    try {
-      return ctx.get('pluginManager', false)
-    } catch {
-      return null
-    }
-  })()
-  if (manager && typeof manager.reload === 'function') {
-    try {
-      const reloaded = await manager.reload(['pet'])
-      if (Array.isArray(reloaded) && reloaded.length > 0) applied = 'reloaded'
-    } catch (error) {
-      reloadError = String(error?.message ?? error)
-    }
-  }
+  // ③ 让挂件内存接住新值；接不住就重载它（此时文件已是新值，重载才读得到）。
+  //    顺序不能反：先改内存再写文件的话，重载这一步会读到旧文件，白费。
+  const adopted = typeof spec.live === 'function' ? await adoptLiveNumber(ctx, spec.live, value, spec.kind) : 'live'
 
-  // ④ 回读核对：文件里的值必须等于我们要的值，否则回滚。
+
+  // ④ 回读核对：文件与挂件内存都得等于目标值，否则回滚。
   let after = ''
   try {
     after = readFileSync(file, 'utf8')
@@ -333,7 +500,7 @@ async function writePetNumber(ctx, spec) {
     after = ''
   }
   const check = verify(after, value)
-  if (!check.ok) {
+  if (!check.ok || adopted === 'stale') {
     try {
       writeFileSync(file, text, 'utf8')
     } catch {
@@ -342,11 +509,11 @@ async function writePetNumber(ctx, spec) {
     return {
       ok: false,
       code: 'verify-failed',
-      message: reloadError ? '写进去了但挂件没接住（' + reloadError + '），已还原' : '写进去又对不上，已还原',
+      message: adopted === 'stale' ? '写进去了，但挂件没重新读它（重载失败），已还原' : '写进去又对不上，已还原',
     }
   }
 
-  return { ok: true, [key]: check[key], applied }
+  return { ok: true, [key]: check[key], applied: adopted }
 }
 
 /** 改亲密度：`{id:'points'}` 那一套（读 points / 只动 affinity.points / 回读 points）。 */
@@ -359,6 +526,8 @@ function writePetAffinity(ctx, points) {
     patch: withPoints,
     sanity: sameExceptPoints,
     verify: verifyPoints,
+    live: livePoints,
+    kind: 'points',
     unreadable: '挂件的状态文件读不懂（可能正在被写），等一秒再试',
   })
 }
@@ -378,6 +547,8 @@ function writePetTreats(ctx, treats) {
     patch: withTreats,
     sanity: sameExceptTreats,
     verify: verifyTreats,
+    live: liveTreats,
+    kind: 'treats',
     unreadable: '挂件的状态文件读不懂（可能正在被写），等一秒再试',
   })
 }
@@ -2826,7 +2997,11 @@ function registerToggleBridgeRoutes(ctx, toggles, getDiagnostics, getLineFeed) {
           }
           try {
             const read = readTreats(petText)
-            if (read.ok) treats = { treats: read.treats, max: TREATS_MAX }
+            if (read.ok) {
+              // 上限同样以挂件为准：它默认只许 20 个，界面按 999 放行只会白让用户填。
+              const petMax = liveTreatsMax(ctx)
+              treats = { treats: read.treats, max: petMax === null ? TREATS_MAX : Math.min(TREATS_MAX, petMax) }
+            }
           } catch {
             treats = null
           }
@@ -2862,10 +3037,13 @@ function registerToggleBridgeRoutes(ctx, toggles, getDiagnostics, getLineFeed) {
           }
           const read = readPoints(text)
           if (!read.ok) return writeJson(res, 200, { ok: false, code: read.code, message: '挂件的状态文件读不懂' })
+          // 显示口径以**挂件内存**为先：它才是用户眼前那只挂件正在用的数。
+          // （文件只是它的草稿，随时会被内存快照整份覆盖。）
+          const live = livePoints(ctx)
           return writeJson(res, 200, {
             ok: true,
             value: {
-              points: read.points,
+              points: live === null ? read.points : live,
               max: AFFINITY_MAX,
               installed: probe.installed,
               enabled: probe.enabled,
@@ -2925,7 +3103,17 @@ function registerToggleBridgeRoutes(ctx, toggles, getDiagnostics, getLineFeed) {
           }
           const read = readTreats(text)
           if (!read.ok) return writeJson(res, 200, { ok: false, code: read.code, message: '挂件的状态文件读不懂' })
-          return writeJson(res, 200, { ok: true, value: { treats: read.treats, max: TREATS_MAX } })
+          const live = liveTreats(ctx)
+          const petMax = liveTreatsMax(ctx)
+          return writeJson(res, 200, {
+            ok: true,
+            value: {
+              treats: live === null ? read.treats : live,
+              // 上限必须报**挂件自己的**（它默认只允许 20 个），不能报我们想要的口径；
+              // 报 999 会让界面允许填 999，用户填完发现被夹回 20，白生气一场。
+              max: petMax === null ? TREATS_MAX : Math.min(TREATS_MAX, petMax),
+            },
+          })
         }
 
         // POST：body 必须是 `{treats: number}`（白名单，别的一律不收）。流程见 writePetTreats。
@@ -2937,12 +3125,14 @@ function registerToggleBridgeRoutes(ctx, toggles, getDiagnostics, getLineFeed) {
         if (keys.length !== 1 || keys[0] !== 'treats') {
           return writeJson(res, 200, { ok: false, code: 'bad-body', message: '只收 treats 这一个字段' })
         }
-        const clamped = clampTreats(body.treats)
+        const petMax = liveTreatsMax(ctx)
+        const cap = petMax === null ? TREATS_MAX : Math.min(TREATS_MAX, petMax)
+        const clamped = clampTreats(body.treats, cap)
         if (!clamped.ok) {
           return writeJson(res, 200, {
             ok: false,
             code: 'bad-treats',
-            message: '小鱼干要填 0 到 ' + TREATS_MAX + ' 之间的整数',
+            message: '小鱼干要填 0 到 ' + cap + ' 之间的整数' + (petMax !== null && petMax < TREATS_MAX ? '（' + cap + ' 是挂件自己定的上限）' : ''),
           })
         }
         const result = await writePetTreats(ctx, clamped.treats)

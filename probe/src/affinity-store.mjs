@@ -87,14 +87,17 @@ export const TREATS_MAX = 999
  * @param {unknown} raw
  * @returns {{ok: true, treats: number} | {ok: false, code: 'bad-treats'}}
  */
-export function clampTreats(raw) {
+export function clampTreats(raw, max = TREATS_MAX) {
   if (typeof raw === 'boolean' || raw === null || raw === undefined) return { ok: false, code: 'bad-treats' }
   if (typeof raw === 'string' && raw.trim() === '') return { ok: false, code: 'bad-treats' }
   const value = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isFinite(value)) return { ok: false, code: 'bad-treats' }
   const rounded = Math.round(value)
   if (rounded < 0) return { ok: true, treats: 0 }
-  if (rounded > TREATS_MAX) return { ok: true, treats: TREATS_MAX }
+  // 上限可被调用方收紧：挂件自己只允许囤 `treats.max` 个（默认 20），
+  // 我们报 999 让它去填，只会被它夹回去——所以由调用方把真实上限传进来。
+  const cap = Number.isFinite(max) && max >= 0 ? Math.floor(max) : TREATS_MAX
+  if (rounded > cap) return { ok: true, treats: cap }
   return { ok: true, treats: rounded }
 }
 

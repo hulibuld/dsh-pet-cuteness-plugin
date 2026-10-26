@@ -103,6 +103,7 @@ function mountWithWebServer(options = {}) {
       // 挂件服务与插件管理器是可选的：默认没有（`installed:false` → 路由回 no-pet），
       // 传进来就能测「真有条目时的读写」，不用去碰用户真实的 ~/.dsh。
       if (name === 'pet' && options.pet) return options.pet
+      if (name === 'loader' && options.loader) return options.loader
       if (name === 'pluginManager' && options.pluginManager) return options.pluginManager
       return false
     },
@@ -839,7 +840,9 @@ test('POST /pet/treats：夹到上限、只改那一个数字、其余字段原�
   const over = await call(route, { method: 'POST', url: `${BRIDGE_PREFIX}/pet/treats`, body: { treats: 1000 } })
   assert.equal(over.payload.ok, true)
   assert.equal(over.payload.value.treats, 999, '超过 999 一律夹到 999')
-  assert.equal(over.payload.value.applied, 'reloaded')
+  // 这个用例没有挂件服务、读不到内存：文件写成了，但只能老实说「重启后生效」，
+  // 不许假装已经热生效（2026-10-26 真事故就是"报成功、其实没生效"）。
+  assert.equal(over.payload.value.applied, 'pending-restart')
 
   const after = JSON.parse(readFileSync(PET_FILE, 'utf8'))
   assert.equal(after.treats.treats, 999)
@@ -851,6 +854,63 @@ test('POST /pet/treats：夹到上限、只改那一个数字、其余字段原�
   assert.equal(negative.payload.value.treats, 0)
   const decimal = await call(route, { method: 'POST', url: `${BRIDGE_PREFIX}/pet/treats`, body: { treats: 3.6 } })
   assert.equal(decimal.payload.value.treats, 4, '非整数按 Math.round')
+})
+
+test('POST /pet/treats：上限跟挂件走（它只许 20 个就按 20 夹），并让它重载后验到生效', async () => {
+  writeFileSync(PET_FILE, petText(3), 'utf8')
+  // 模拟真挂件：内存里只允许囤 20 个；restart 之后从文件重新读，内存值就变成新的那一个。
+  let live = { stocked: 3, max: 20 }
+  let restarted = 0
+  const pet = {
+    isEnabled: () => true,
+    state: () => ({ treats: { stocked: live.stocked, max: live.max }, affinity: { points: 415 } }),
+  }
+  const loader = {
+    entries: () => [
+      {
+        options: { id: 'pet' },
+        fiber: {
+          restart: async () => {
+            restarted += 1
+            const text = JSON.parse(readFileSync(PET_FILE, 'utf8'))
+            live = { stocked: text.treats.treats, max: 20 }
+          },
+        },
+      },
+    ],
+  }
+  const { routes } = mountWithWebServer({ pet, loader })
+  const route = routes.get(`exact ${BRIDGE_PREFIX}/pet/treats`)
+
+  const res = await call(route, { method: 'POST', url: `${BRIDGE_PREFIX}/pet/treats`, body: { treats: 999 } })
+  assert.equal(res.payload.ok, true)
+  assert.equal(res.payload.value.treats, 20, '999 要夹到挂件自己的上限 20')
+  assert.equal(res.payload.value.applied, 'reloaded', '内存没接住时要重载挂件再验')
+  assert.equal(restarted >= 1, true, '必须真的调过 fiber.restart')
+})
+
+test('POST /pet/affinity：直接改挂件内存并让它存盘（不用重载、不闪）', async () => {
+  writeFileSync(PET_FILE, petText(1), 'utf8')
+  // 假挂件：ledger.snapshot 就是它的内存真相，flush() 会把快照写回 pet.json。
+  const snapshot = { affinity: { points: 415 }, treats: { treats: 1, lastTreatGrantAt: 1, turnsAtLastTreatGrant: 2 } }
+  let flushes = 0
+  const pet = {
+    isEnabled: () => true,
+    ledger: { snapshot },
+    state: () => ({ affinity: { points: snapshot.affinity.points }, treats: { stocked: snapshot.treats.treats, max: 20 } }),
+    flush: () => {
+      flushes += 1
+      writeFileSync(PET_FILE, JSON.stringify({ affinity: snapshot.affinity, treats: snapshot.treats }), 'utf8')
+    },
+  }
+  const { routes } = mountWithWebServer({ pet })
+  const route = routes.get(`exact ${BRIDGE_PREFIX}/pet/affinity`)
+  const res = await call(route, { method: 'POST', url: `${BRIDGE_PREFIX}/pet/affinity`, body: { points: 5000 } })
+  assert.equal(res.payload.ok, true)
+  assert.equal(res.payload.value.points, 5000)
+  assert.equal(res.payload.value.applied, 'live', '内存改成功就不用重载挂件')
+  assert.equal(snapshot.affinity.points, 5000, '挂件内存必须真的变成新值')
+  assert.equal(flushes >= 1, true, '改完要让它自己存一次盘，否则下次 flush 会盖回去')
 })
 
 test('POST /pet/treats：body 不合法一律整单拒绝（bad-body / bad-treats）', async () => {
@@ -875,18 +935,18 @@ test('POST /pet/treats：body 不合法一律整单拒绝（bad-body / bad-treat
 test('POST /pet/treats：回读对不上就回滚并回 verify-failed（失败信封和 /pet/affinity 同构）', async () => {
   const original = petText(1)
   writeFileSync(PET_FILE, original, 'utf8')
-  // 模拟「挂件 reload 时又把文件改回去了」：写进去的值当场被覆盖 → 回读必然对不上。
+  // 模拟「重载了但挂件没接住」：内存始终是旧值 → 必须回滚文件并报 verify-failed。
+  // 这条是 2026-10-26 那次事故的回归测试：以前只比文件，会出现"报成功、其实没生效"。
+  const stubborn = {
+    isEnabled: () => true,
+    state: () => ({ treats: { stocked: 1, max: 20 } }),
+  }
   const { routes } = mountWithWebServer({
-    pet: hasPet,
-    pluginManager: {
-      reload: async () => {
-        writeFileSync(PET_FILE, original, 'utf8')
-        return ['pet']
-      },
-    },
+    pet: stubborn,
+    loader: { entries: () => [{ options: { id: 'pet' }, fiber: { restart: async () => {} } }] },
   })
   const route = routes.get(`exact ${BRIDGE_PREFIX}/pet/treats`)
-  const res = await call(route, { method: 'POST', url: `${BRIDGE_PREFIX}/pet/treats`, body: { treats: 42 } })
+  const res = await call(route, { method: 'POST', url: `${BRIDGE_PREFIX}/pet/treats`, body: { treats: 20 } })
   assert.equal(res.payload.ok, false)
   assert.equal(res.payload.code, 'verify-failed')
   assert.equal(typeof res.payload.message, 'string')
