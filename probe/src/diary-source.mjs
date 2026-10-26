@@ -20,7 +20,7 @@ const PER_MESSAGE_CHARS = 400
 /** 一次最多带多少条消息。 */
 const MAX_MESSAGES = 600
 /** 整份摘要的字符上限（约 2 万 token 的量级，DeepSeek 吃得下）。 */
-const MAX_DIGEST_CHARS = 120_000
+const MAX_DIGEST_CHARS = 40_000
 /** 摘出来的 prompt 里，摘要之外留给指示的余量。 */
 const MAX_PROMPT_CHARS = 140_000
 
@@ -43,6 +43,145 @@ export function textOfContent(content) {
     if (block.type === 'text' && typeof block.text === 'string') parts.push(block.text)
   }
   return parts.join('\n')
+}
+
+/* ─────────── 自污染过滤（用户 m03131／m03151 报的「日记雷同」根因） ─────────── */
+
+/**
+ * 写日记这个动作本身会在会话日志里留下两类文本：
+ *
+ *   1. 提示词：`buildDiaryPrompt()` 生成的那一大段，**里面嵌着当天的摘要**。
+ *      它以 `user/message` 的形式存在执笔子代理自己的会话里；
+ *   2. 正文：子代理最后那条 `assistant/message`，本身就是一篇写好的日记。
+ *
+ * 这两类如果第二天又被收进摘要，就会一天天自我叠加：第二天的正文抄第一天，
+ * 第三天抄第二天，几天以后整本日记都在讲同一批旧事；同时当天真做的事被挤到
+ * 几十万字之后，模型根本读不到。2026-10-26 实测：标签 10-26 的摘要里塞了
+ * 29 条这种自产文本（摘要 69K 字），正文却只写了 10-24 的事。
+ *
+ * 判据要够硬（宁可漏几条真消息，也不能把上一篇日记当素材喂回去）：
+ *   - 提示词里独有的句子；或
+ *   - 以 `—— 2026年10月24日` 这种落款结尾；或
+ *   - 带 `date: / diarist: / written_at:` 的 frontmatter。
+ */
+export const DIARY_SELF_MARKERS = [
+  '我要写日记了',
+  '不是写报告，是写给我自己看的那种',
+  '今天的事已经在上面的材料里了',
+]
+
+const DIARY_FOOTER = /——\s*\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日\s*$/
+const DIARY_FRONTMATTER = /^\s*-{3}\s*[\s\S]{0,400}?\b(?:date|diarist|written_at)\s*:/
+
+/**
+ * 宿主每轮塞进来的机器文本。它们会以 `user/message` 落盘，但对"今天发生了什么"
+ * 零信息量，却是摘要里最大的噪音源。2026-10-26 实测：标签 10-26 的摘要 12 万字里
+ * 有 8.5 万字是这几种东西（光是每轮的 `Time sampled while preparing turn N` 就 3.2 万字）。
+ *
+ * 判据只认这几种固定开头，不做宽泛猜测——宁可留几条噪音，也不能误删主人真说的话。
+ */
+const HARNESS_NOISE = [
+  /^Time sampled while preparing turn/,
+  /^Current runtime context\./,
+  /^MNEMON RUNTIME MEMORY SNAPSHOT/,
+  /^The available skill catalog changed\./,
+  /^Browser time zone for this request:/,
+]
+
+/**
+ * 这段文本只是宿主自己的运行时记录吗（时间戳注记、记忆快照、技能目录通知…）。
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+export function isHarnessNoise(text) {
+  if (typeof text !== 'string' || !text) return false
+  const head = text.trimStart()
+  for (const re of HARNESS_NOISE) {
+    if (re.test(head)) return true
+  }
+  // `Time sampled...` 和 `Browser time zone...` 常常在同一条消息里前后脚出现。
+  if (head.includes('Time sampled while preparing turn') && head.length < 600) return true
+  // 技能目录通知有时会被别的文本包一层（引用、分隔线），看前 300 字就够了。
+  if (head.slice(0, 300).includes('available skill catalog changed')) return true
+  return false
+}
+
+/**
+ * 把 dsh-ui 围栏整块换成一句占位：那是界面卡片的结构化 JSON，
+ * 几百上千字全是 `"type":"table"` 这种键，对写日记没有用，还会把模型带跑。
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripUiFences(text) {
+  if (typeof text !== 'string' || !text.includes('```dsh-ui')) return text
+  return text.replace(/```dsh-ui[\s\S]*?```/g, '（发了一张界面卡片）')
+}
+
+/**
+ * 这段文本是不是「我们自己写日记时留下的东西」。
+ *
+ * @param {string} text 完整文本（不要先截断：落款在结尾、frontmatter 在开头）
+ * @returns {boolean}
+ */
+/**
+ * 我们那封日记提示词的第一句：`今天是 2026-10-26。下面是我今天跟主人说话的记录（…）`。
+ * 它只出现在执笔会话里，是最硬的"这是我自己的活"的证据。
+ */
+const DIARY_PROMPT_SIGNATURE = /下面是我今天跟主人说话的记录/
+
+/**
+ * 从一条事件里取正文。宿主的两种落盘形状都要认：
+ *   - 用户消息：`data.content`（`data.message` 根本没有）；
+ *   - 助手消息：`data.message.content`。
+ * 2026-10-26 之前只读第二种，结果是**主人说的话一条都没进过摘要**，
+ * 日记里永远只有"我"一个人自说自话。
+ *
+ * @param {any} data 事件的 data 字段
+ * @returns {string}
+ */
+export function eventTextOf(data) {
+  if (!data || typeof data !== 'object') return ''
+  const fromMessage = textOfContent(data.message?.content)
+  if (fromMessage) return fromMessage
+  return textOfContent(data.content)
+}
+
+export function isDiaryArtifact(text) {
+  if (typeof text !== 'string' || !text) return false
+  for (const marker of DIARY_SELF_MARKERS) {
+    if (text.includes(marker)) return true
+  }
+  if (DIARY_FOOTER.test(text.trim())) return true
+  if (DIARY_FRONTMATTER.test(text)) return true
+  return false
+}
+
+/**
+ * 整个会话是不是「我们自己写日记的那次执笔」。
+ *
+ * 判据：会话里有**一条很长的 user 消息**（提示词两三千字起）是我们的日记提示词。
+ * 加长度门槛是为了不误伤：万一主人真在聊天里说了一句"我要写日记了"，
+ * 那条消息只有十几个字，不该把整个会话丢掉。
+ *
+ * 2026-10-26 实测：一天里跑了 24 次执笔（重试 + 手动），每次都在会话里留下一份
+ * 「提示词（内嵌当天摘要）」和「写好的正文」。不整段丢掉，第二天就会拿它当素材。
+ *
+ * @param {Array<any>} events
+ * @returns {boolean}
+ */
+export function isDiarySelfSession(events) {
+  if (!Array.isArray(events)) return false
+  for (const event of events) {
+    if (!event || event.type !== 'user/message') continue
+    const data = event.data ?? {}
+    const full = eventTextOf(data)
+    if (full.length < 1200) continue
+    if (DIARY_PROMPT_SIGNATURE.test(full)) return true
+    if (isDiaryArtifact(full)) return true
+  }
+  return false
 }
 
 /**
@@ -79,9 +218,63 @@ function inWindow(event, start, end) {
  * @param {{start:number, end:number, perMessageChars?:number}} options
  * @returns {Array<{role:'user'|'assistant', at:number, text:string, model?:string}>}
  */
+/**
+ * 把"已有日记正文的开头"整理成可比较的片段：去掉空白、丢掉太短的。
+ *
+ * @param {string[]|undefined} heads
+ * @returns {string[]}
+ */
+function normalizeHeads(heads) {
+  if (!Array.isArray(heads)) return []
+  const out = []
+  for (const head of heads) {
+    if (typeof head !== 'string') continue
+    const flat = headForCompare(head)
+    if (flat.length >= 10) out.push(flat)
+  }
+  return out
+}
+
+/**
+ * 比对用的"骨架"：只留文字和数字。
+ *
+ * 为什么要这么狠：同一天意的话在日记本里是 `那个“和”字的符号`，子代理回执里是
+ * `那个"和"字的符号`——引号一换，字面比对就全废（2026-10-26 实测撞到）。
+ * 标点、空白、引号都不携带信息，去掉之后同一句话才认得出是同一句。
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function headForCompare(text) {
+  if (typeof text !== 'string') return ''
+  // 24 个汉字已经足够唯一（一篇日记的开头不太可能跟别人重样），
+  // 留太长反而一遇到"叫好听一点的不行吗 / 叫好听的不好吗"这种改写就认不出。
+  const core = text.replace(/[^\p{Script=Han}\p{L}\p{N}]/gu, '')
+  return core.slice(0, 24)
+}
+
+/**
+ * 这段文本里有没有"已经写在日记本里的正文"。
+ *
+ * @param {string} text
+ * @param {string[]} heads
+ * @returns {boolean}
+ */
+function hitsAnyHead(text, heads) {
+  if (!heads.length || typeof text !== 'string') return false
+  const core = text.replace(/[^\p{Script=Han}\p{L}\p{N}]/gu, '')
+  for (const head of heads) {
+    if (core.includes(head)) return true
+  }
+  return false
+}
+
 export function pickMessages(events, options) {
   const { start, end } = options
   const perMessageChars = options.perMessageChars ?? PER_MESSAGE_CHARS
+  // 已经写进日记本里的正文（连同"日记已写好"的回执）从这里开始一律不收。
+  // 光靠标记/落款判断挡不住：公测版日记没有落款行，子代理回执又只有正文。
+  const heads = normalizeHeads(options.excludeHeads)
   const out = []
   if (!Array.isArray(events)) return out
   for (const event of events) {
@@ -89,10 +282,16 @@ export function pickMessages(events, options) {
     if (!inWindow(event, start, end)) continue
     const data = event.data ?? {}
     const message = data.message ?? {}
-    const text = squeezeText(textOfContent(message.content), perMessageChars)
+    // 先按**完整**文本判断自污染，再截断：落款在结尾、frontmatter 在开头，
+    // 截断后两头都没了，判据就失效（这是 2026-10-26 第一次没查出来的原因）。
+    const full = eventTextOf(data)
+    if (isDiaryArtifact(full)) continue
+    if (isHarnessNoise(full)) continue
+    if (hitsAnyHead(full, heads)) continue
+    const text = squeezeText(stripUiFences(full), perMessageChars)
     if (!text) continue
     const role = event.type === 'user/message' ? 'user' : 'assistant'
-    const source = message.source ?? {}
+    const source = message.source ?? data.source ?? {}
     const entry = { role, at: event.time, text }
     if (role === 'assistant' && typeof source.model === 'string') {
       entry.model = typeof source.provider === 'string' ? `${source.provider}/${source.model}` : source.model
@@ -205,18 +404,73 @@ export function buildDigest(sessions, options = {}) {
   }
   flat.sort((a, b) => a.message.at - b.message.at)
   const total = flat.length
-  const kept = []
-  let chars = 0
-  for (let i = flat.length - 1; i >= 0; i -= 1) {
-    if (kept.length >= maxMessages) break
-    const line = formatLine(flat[i])
-    if (chars + line.length > maxChars && kept.length > 0) break
-    kept.push({ line, index: i })
-    chars += line.length
+  const lines = flat.map((item) => formatLine(item))
+  const totalChars = lines.reduce((sum, line) => sum + line.length + 1, 0)
+
+  // 装得下就全给，别做多余的事。
+  if (totalChars <= maxChars && total.length <= maxMessages) {
+    return { text: lines.join('\n'), kept: total, dropped: 0 }
   }
-  kept.reverse()
-  const text = kept.map((item) => item.line).join('\n')
-  return { text, kept: kept.length, dropped: total - kept.length }
+
+  // 装不下时按**小时分桶**，每个桶给同样的预算。
+  //
+  // 旧的写法是「从最新往前塞，塞满就停」，后果是一天里最早那几个小时被整段丢掉；
+  // 而人对"今天干了什么"的记忆是从早上开始的，丢早上等于丢主线（用户 m03151 抱怨
+  // 日记没写白天做的事，这条是第二个原因）。分桶之后，早上的事一定还在。
+  const buckets = new Map()
+  for (let i = 0; i < flat.length; i += 1) {
+    const hour = new Date(flat[i].message.at)
+    const key = `${hour.getFullYear()}-${hour.getMonth()}-${hour.getDate()}-${hour.getHours()}`
+    const list = buckets.get(key) ?? []
+    list.push(i)
+    buckets.set(key, list)
+  }
+  const hourCount = Math.max(buckets.size, 1)
+  const perHourChars = Math.max(400, Math.floor(maxChars / hourCount) - 64)
+  // 每个桶先拿「平均份」；maxMessages 是硬上限，不能因为桶少就把上限顶高。
+  const evenMessages = Math.max(1, Math.floor(maxMessages / hourCount))
+  const keepIndexes = []
+  const rest = []
+  let usedChars = 0
+  for (const indexes of buckets.values()) {
+    const left = []
+    let used = 0
+    let taken = 0
+    for (const index of indexes) {
+      const line = lines[index]
+      if (taken >= evenMessages) {
+        left.push(index)
+        continue
+      }
+      if (used + line.length > perHourChars && taken > 0) {
+        left.push(index)
+        continue
+      }
+      keepIndexes.push(index)
+      used += line.length
+      taken += 1
+    }
+    usedChars += used
+    rest.push(left)
+  }
+
+  // 平均份没把预算用满时，再把剩下的按时间顺序补进来（同样受两个硬上限约束）。
+  if (keepIndexes.length < maxMessages) {
+    for (const left of rest) {
+      for (const index of left) {
+        if (keepIndexes.length >= maxMessages) break
+        const line = lines[index]
+        if (usedChars + line.length > maxChars) break
+        keepIndexes.push(index)
+        usedChars += line.length
+      }
+      if (keepIndexes.length >= maxMessages || usedChars >= maxChars) break
+    }
+  }
+
+  keepIndexes.sort((a, b) => a - b)
+  const keptLines = keepIndexes.map((index) => lines[index])
+  return { text: keptLines.join('\n'), kept: keptLines.length, dropped: total - keptLines.length }
 }
 
 /**
@@ -545,14 +799,24 @@ export function collectDay(input) {
   // 直接用 localDayBounds(时刻) 会把 22:30 算成"今天"，和用户规则正好相反。
   const day = localDayBounds(logicalDayFor(input.now ?? Date.now()))
   const fileName = input.fileName ?? 'session.v4.jsonl.zstd'
+  const excludeHeads = Array.isArray(input.excludeHeads) ? input.excludeHeads : []
   const dirs = typeof listDirs === 'function' ? listDirs(sessionsRoot) : []
   const sessions = []
+  // 被丢掉的"自己写日记"会话数：诊断时要知道到底是没聊，还是全被过滤了。
+  let selfSessions = 0
   const usagePerSession = []
   for (const dirName of dirs ?? []) {
     const filePath = `${sessionsRoot}/${dirName}/${fileName}`
     const events = readEvents(filePath)
     if (!Array.isArray(events) || events.length === 0) continue
-    const messages = pickMessages(events, day)
+    // 执笔子代理自己的会话整段丢掉：它的 user 消息就是 diary prompt（里面嵌着当天摘要），
+    // assistant 消息就是上一篇日记。留着它就等于每天把旧日记喂回给模型抄。
+    // 用量也一起丢：写日记的 token 不该算进「今天谁干得最多」。
+    if (isDiarySelfSession(events)) {
+      selfSessions += 1
+      continue
+    }
+    const messages = pickMessages(events, { ...day, excludeHeads })
     if (messages.length > 0) sessions.push({ sessionLabel: sessionLabelOf(dirName), messages })
     usagePerSession.push(usageOfSession(events, day))
   }
@@ -563,6 +827,7 @@ export function collectDay(input) {
     start: day.start,
     end: day.end,
     sessions,
+    selfSessions,
     digest: text,
     kept,
     dropped,

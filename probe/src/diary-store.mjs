@@ -253,10 +253,18 @@ export function listDiaryFiles({ dir, io = {}, limit = 10 } = {}) {
   })
 }
 
-/** 去掉 `---` 包起来的 frontmatter。 */
+/**
+ * 去掉 `---` 包起来的 frontmatter。
+ *
+ * 两种轻微变形的真实文件都要认（2026-10-26 在用户的日记本里撞到过，全部三篇都是这样）：
+ *   - 行尾带两个空格（某些编辑器/模型输出会把换行写成 markdown 硬换行）；
+ *   - 分隔线前面多了一个反斜杠 `\---`（模型怕被当成标题分隔符，自己转义了）。
+ * 认不出来的后果不是"少一行"：整段 frontmatter 会被当成正文，摘要里就多出一堆
+ * `diarist: raccoon/...` 这种东西，还会让"已写正文"的比对全部失效。
+ */
 export function stripFrontmatter(text) {
   if (typeof text !== 'string') return ''
-  const match = /^---\n[\s\S]*?\n---\n?/.exec(text)
+  const match = /^\\?---[ \t]*\r?\n[\s\S]*?\n\\?---[ \t]*\r?\n?/.exec(text)
   if (!match) return text
   return text.slice(match[0].length)
 }
@@ -268,6 +276,8 @@ export function stripFrontmatter(text) {
 export function firstSentences(text, limit = 60) {
   if (typeof text !== 'string') return ''
   const body = text
+    // 先削掉开头的空白再认标题行：frontmatter 被剥掉后正文常常以空行开头。
+    .trimStart()
     .replace(/^#\s*[^\n]*\n+/, '')
     .replace(/\s+/g, ' ')
     .trim()

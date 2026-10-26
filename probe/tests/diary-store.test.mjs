@@ -234,6 +234,17 @@ test('stripFrontmatter / firstSentences：摘要不含 frontmatter，超长加�
   assert.equal(firstSentences(null), '')
 })
 
+test('stripFrontmatter：认得行尾双空格和 \\--- 转义过的分隔线（真实日记本里就是这样）', () => {
+  const real = '\\---  \ndate: 2026-10-26  \ndiarist: raccoon/x  \n\\---\n\n# 2026年10月26日\n\n今天写了稿子。\n'
+  const body = stripFrontmatter(real)
+  assert.ok(!body.includes('diarist:'), 'frontmatter 不能被当成正文')
+  assert.equal(firstSentences(stripFrontmatter(real), 60), '今天写了稿子。', '摘要里也不许出现 diarist')
+})
+
+test('firstSentences：正文以空行开头时，标题行照样要剥掉', () => {
+  assert.equal(firstSentences('\n# 标题\n\n正文一句', 60), '正文一句')
+})
+
 /* ---------------- 身份标记：文件夹改名之后能自己认回来 ---------------- */
 
 test('ensureDiaryMarker：首次打标给全字段（含 plugin），第二次一个字都不写', () => {

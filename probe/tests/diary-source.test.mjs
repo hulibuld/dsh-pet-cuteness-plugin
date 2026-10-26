@@ -162,16 +162,21 @@ test('挑执笔：没有任何 DeepSeek 时返回 null，不偷偷换人', () =>
   assert.equal(mod.pickDiarist(usage), null)
 })
 
-test('摘要按时间正序，超量时先丢最旧的（日记写今天，不考古）', () => {
+test('摘要超量时按小时分桶取样：早上和晚上的事都得留下', () => {
+  // 20 条横跨 9:00、14:00、20:00 三个时段，上限只给 6 条。
   const messages = []
-  for (let i = 0; i < 20; i += 1) messages.push({ role: 'user', at: at(9, i), text: `第${i}句` })
-  const { text, kept, dropped } = mod.buildDigest([{ sessionLabel: 'abcd1234', messages }], { maxMessages: 5 })
-  assert.equal(kept, 5)
-  assert.equal(dropped, 15)
-  assert.ok(text.includes('第19句'), '最新的必须在')
-  assert.ok(!text.includes('第0句'), '最旧的应该被丢掉')
+  for (let i = 0; i < 20; i += 1) {
+    const hour = i < 7 ? 9 : i < 14 ? 14 : 20
+    messages.push({ role: 'user', at: at(hour, i % 7), text: `第${i}句-${hour}点` })
+  }
+  const { text, kept, dropped } = mod.buildDigest([{ sessionLabel: 'abcd1234', messages }], { maxMessages: 6 })
+  assert.ok(kept <= 6, `不能超过上限，实际 ${kept}`)
+  assert.equal(kept + dropped, 20)
+  // 三个小时桶都要有代表：以前的"从最新往前塞"会把 9 点整段丢掉。
+  assert.ok(text.includes('9点'), '早上那段不能被整段丢掉')
+  assert.ok(text.includes('20点'), '晚上那段也要在')
   // 读起来仍然是时间正序
-  assert.ok(text.indexOf('第15句') < text.indexOf('第19句'))
+  assert.ok(text.indexOf('9点') < text.indexOf('20点'))
 })
 
 test('摘要是人读的格式：带时刻、带说话人', () => {
@@ -353,4 +358,83 @@ test('切日点只有一个真源：diary-doc 的默认时刻必须等于 DAY_RO
   const doc = await import('../src/diary-doc.mjs')
   assert.equal(mod.DAY_ROLLOVER_HOUR, 21)
   assert.equal(doc.DAY_ROLLOVER_TIME, String(mod.DAY_ROLLOVER_HOUR).padStart(2, '0') + ':00')
+})
+
+// ── 2026-10-26 修的一组：日记在抄自己 ───────────────────────────────────────
+// 用户原话：「日记太雷同了，尤其是开头」「今天的日记没讲我今天干的事情」。
+
+/** 宿主的真实用户消息形状：正文在 data.content，`data.message` 根本不存在 */
+function userFlatAt(time, text) {
+  return {
+    type: 'user/message',
+    time,
+    data: { role: 'user', id: `m${time}`, source: { kind: 'user' }, content: [{ type: 'text', text }] },
+  }
+}
+
+test('主人说的话要进摘要（宿主把用户正文放在 data.content，不在 data.message 里）', () => {
+  const events = [userFlatAt(at(10, 0), '今天写短视频稿子'), assistantAt(at(10, 1), '好，我来写')]
+  const day = { start: at(0), end: at(23, 59) }
+  const picked = mod.pickMessages(events, day)
+  assert.equal(picked.length, 2)
+  assert.equal(picked[0].role, 'user')
+  assert.equal(picked[0].text, '今天写短视频稿子')
+  const digest = mod.buildDigest([{ sessionLabel: 'aaaa', messages: picked }])
+  assert.ok(digest.text.includes('主人：今天写短视频稿子'), '摘要里必须有主人这条')
+})
+
+test('宿主塞进来的运行时注记不进摘要（时间戳、记忆快照、技能目录通知）', () => {
+  assert.equal(mod.isHarnessNoise('Time sampled while preparing turn 3, step 1: 2026-10-26T22:01'), true)
+  assert.equal(mod.isHarnessNoise('Current runtime context. This snapshot supersedes'), true)
+  assert.equal(mod.isHarnessNoise('MNEMON RUNTIME MEMORY SNAPSHOT\nUSER.md'), true)
+  assert.equal(mod.isHarnessNoise('The available skill catalog changed. This complete catalog'), true)
+  assert.equal(mod.isHarnessNoise('今天写短视频稿子'), false)
+  // 一条真话里顺嘴提到"日记"，不能被当成噪音
+  assert.equal(mod.isHarnessNoise('我要写日记了'), false)
+})
+
+test('dsh-ui 围栏整块换成占位，不把界面 JSON 喂给模型', () => {
+  const text = '看这个\n```dsh-ui\n{"title":"x","items":[{"type":"stat","label":"a","value":1}]}\n```\n就是这样'
+  const stripped = mod.stripUiFences(text)
+  assert.ok(!stripped.includes('"type":"stat"'))
+  assert.ok(stripped.includes('（发了一张界面卡片）'))
+})
+
+test('执笔会话整段丢掉：提示词里带着当天的摘要，不收就会自己抄自己', () => {
+  const prompt = '今天是 2026-10-25。下面是我今天跟主人说话的记录（时间是大概的）：\n- [10:00] 主人：…' + 'x'.repeat(1300)
+  const events = [userFlatAt(at(21, 0), prompt), assistantAt(at(21, 1), '今天主人让我改名字。')]
+  assert.equal(mod.isDiarySelfSession(events), true)
+  // 主人只是聊到写日记，不会被误判
+  assert.equal(mod.isDiarySelfSession([userFlatAt(at(21, 0), '我要写日记了')]), false)
+})
+
+test('已经写进日记本的正文不会再回到摘要里（回执、正文副本都挡得住）', () => {
+  const body = '今天主人让我改名字，说门牌号上写不了空格。'
+  const events = [
+    userFlatAt(at(10, 0), '今天干了很多事'),
+    userFlatAt(at(21, 1), `Agent abc sent a message:\n\n日记已写好（正文如下）：\n\n${body}`),
+    assistantAt(at(21, 2), body),
+  ]
+  const day = { start: at(0), end: at(23, 59) }
+  const kept = mod.pickMessages(events, { ...day, excludeHeads: [body] })
+  assert.equal(kept.length, 1, '只留那条真对话')
+  assert.equal(kept[0].text, '今天干了很多事')
+})
+
+test('collectDay 会把执笔会话整个跳过，并报出跳了几个', () => {
+  const prompt = '今天是 2026-10-25。下面是我今天跟主人说话的记录：' + 'y'.repeat(1300)
+  const files = {
+    'ws/session-human': [userFlatAt(at(10, 0), '写了短视频稿子'), assistantAt(at(10, 1), '收到')],
+    'ws/session-writer': [userFlatAt(at(21, 0), prompt), assistantAt(at(21, 1), '今天主人让我改名字。')],
+  }
+  const day = mod.collectDay({
+    sessionsRoot: '/sessions',
+    now: at(20, 59),
+    listDirs: () => Object.keys(files),
+    readEvents: (file) => files[file.replace('/sessions/', '').replace(/\/session\.v4\.jsonl\.zstd$/, '')],
+  })
+  assert.equal(day.sessions.length, 1, '只认那个人味会话')
+  assert.equal(day.selfSessions, 1, '跳过几个要能报出来，方便查')
+  assert.ok(day.digest.includes('短视频稿子'))
+  assert.ok(!day.digest.includes('今天主人让我改名字'))
 })
