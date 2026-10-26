@@ -1,0 +1,72 @@
+{
+  "format": 1,
+  "title": {
+    "en": "dsh-pet-cuteness",
+    "zh": "鲸鱼娘 · 插件自带索引"
+  },
+  "description": {
+    "en": "dsh-pet-cuteness-plugin's own index, for trying it before the community catalog picks it up.",
+    "zh": "dsh-pet-cuteness-plugin 自带的索引，社区目录收录前先用它安装。"
+  },
+  "metadata": {
+    "categories": {
+      "fun": {
+        "title": {
+          "en": "Fun",
+          "zh": "趣味"
+        }
+      }
+    },
+    "labels": {
+      "companion": {
+        "title": {
+          "en": "Companion",
+          "zh": "陪伴"
+        }
+      }
+    },
+    "sortKeys": {}
+  },
+  "plugins": [
+    {
+      "name": "dsh-pet-cuteness-plugin",
+      "title": {
+        "en": "Cuteness for dsh-pet",
+        "zh": "鲸鱼娘 · 人格与日记"
+      },
+      "description": {
+        "en": "Companion plugin for dsh-pet: persona card, Chinese reasoning lines above the pet, click reactions, and a daily diary she writes herself.",
+        "zh": "dsh-pet 的附属插件：给桌面上的鲸鱼娘套上二次元人格，让她的思考过程说中文、被点会回话，还会每天自己写一篇日记。"
+      },
+      "author": "Yuzhou",
+      "homepage": "https://github.com/hulibuld/dsh-pet-cuteness-plugin",
+      "repository": {
+        "url": "https://github.com/hulibuld/dsh-pet-cuteness-plugin"
+      },
+      "metadata": {
+        "category": "fun",
+        "keywords": [
+          "dsh-plugin",
+          "dsh-pet",
+          "companion",
+          "persona",
+          "diary"
+        ],
+        "labels": [
+          "companion"
+        ],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.2.3",
+          "publishTimestamp": 1792991296,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {}
+        }
+      ]
+    }
+  ]
+}
