@@ -42,7 +42,7 @@ process.env.DSH_HOME = DSH_HOME
 const { apply } = await import('../index.js')
 
 /** 造一个最小可用的宿主 ctx；只实现插件真正用到的那几个面。 */
-function mountPlugin({ sessionId = SESSION_ON } = {}) {
+function mountPlugin({ sessionId = SESSION_ON, pet = null } = {}) {
   const sections = new Map()
 
   const prompt = {
@@ -82,6 +82,7 @@ function mountPlugin({ sessionId = SESSION_ON } = {}) {
     get(name) {
       if (name === 'systemPrompt') return prompt
       if (name === 'agents') return { list: () => [agent] }
+      if (name === 'pet') return pet || false
       return false
     },
     effect(fn) {
@@ -265,4 +266,54 @@ test('热重载：同一个 agent 再 apply 一次，必须先拆旧段再注册
   assert.ok(second, '重载后必须重新注册上人设段')
   assert.notEqual(second, first, '生效的必须是新一代段落对象，不能还是上一版')
   assert.equal(agentSections.size, 2, 'agent 层只该有 1 份人设段 + 1 份思考遮蔽段，不能堆叠')
+})
+
+test('挂件面板按钮：装了 dsh-pet 就注册一个「写日记」，没装就什么都不做', () => {
+  /* dsh-pet 0.4.11 的官方扩展点 `ctx.pet.registerPanelAction`。
+     两条都要守住：①装了挂件 → 注册的参数能被官方校验器接受（id 语法、label ≤24、title ≤80、
+     onSelect 是函数）；②没装挂件 → 不注册也不抛错（不然没装挂件的用户启动就报错）。 */
+  const registered = []
+  const disposed = []
+  const pet = {
+    registerPanelAction(spec) {
+      registered.push(spec)
+      return () => disposed.push(spec.id)
+    },
+  }
+
+  const { ctx } = mountPlugin({ pet })
+  apply(ctx)
+
+  assert.equal(registered.length, 1, '应该刚好注册一个按钮')
+  const spec = registered[0]
+  assert.equal(spec.id, 'cuteness-diary-write')
+  assert.match(spec.id, /^[a-z0-9][a-z0-9._-]{0,63}$/, 'id 要过 dsh-pet 的 id 语法')
+  assert.equal(spec.label, '写日记')
+  assert.ok(spec.label.length <= 24, 'label 上限 24 字')
+  assert.ok(typeof spec.title === 'string' && spec.title.length <= 80, 'title 上限 80 字')
+  assert.equal(typeof spec.order, 'number')
+  assert.equal(typeof spec.onSelect, 'function')
+
+  // 没装挂件：注册面根本不存在，apply 也不能抛错
+  const bare = mountPlugin()
+  assert.doesNotThrow(() => apply(bare.ctx), '没装挂件时 apply 不能抛错')
+  assert.equal(registered.length, 1, '没装挂件时不应该多注册一次')
+})
+
+test('挂件面板按钮被点：走真的写日记入口，返回结构化结果而不是抛错', async () => {
+  /* 点击是官方 `POST /api/pet/panel-action` 派发过来的，宿主只看 ok/失败，
+     所以 onSelect 必须自己把异常收干净——抛出去会让宿主记一条「panel-action-failed」。 */
+  const registered = []
+  const pet = { registerPanelAction(spec) { registered.push(spec); return () => {} } }
+
+  const { ctx } = mountPlugin({ pet })
+  apply(ctx)
+  const spec = registered[0]
+
+  const result = await spec.onSelect()
+  assert.equal(typeof result, 'object')
+  assert.notEqual(result, null)
+  assert.equal(result.ok, false, '测试环境没配日记本，应当明确回失败而不是假装成功')
+  assert.equal(typeof result.code, 'string')
+  assert.ok(result.code.length > 0, '失败要带机器可读的 code')
 })

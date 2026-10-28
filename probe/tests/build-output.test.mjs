@@ -560,7 +560,13 @@ test('气泡跟手：真实量 dsh-pet DOM、120ms 节流、量不到退回 2s /
   assert.equal(level2.level, 2)
   assert.equal(level2.rect.left, 1000 - 20 - 160, '/pet 的 right 是"离右边多少"，要换算成 left')
   assert.equal(level2.rect.top, 800 - 20 - 160)
-  assert.equal(pet.pickPetAnchor({ petDisplay: { visible: false }, viewport }).level, 3, '她自己藏起来时别在原地冒气泡')
+  // 用户 2026-10-27：挂件隐藏之后气泡还在原地冒。
+  // 现在的口径是"不画"，不再是"退回右下角继续画"。
+  const hiddenByFlag = pet.pickPetAnchor({ sentinel: true, hidden: true, viewport })
+  assert.equal(hiddenByFlag.hidden, true, '明确标记挂件不在时要隐藏')
+  assert.equal(hiddenByFlag.rect, undefined, '隐藏时不该再给一个 rect 让气泡继续挂')
+  const hiddenByPet = pet.pickPetAnchor({ petDisplay: { visible: false }, viewport })
+  assert.equal(hiddenByPet.hidden, true, '她自己藏起来时气泡要一起收，不许在原地冒')
   assert.equal(pet.pickPetAnchor({}).level, 3, '什么都量不到也要给一个默认位置')
   assert.equal(pet.pickPetAnchor({ viewport }).rect.left, 1000 - 20 - 160)
   assert.equal(pet.pickPetAnchor({}).rect.left, 1280 - 20 - 160, '连视口都读不到时用 1280×800 出厂值')
@@ -582,6 +588,16 @@ test('气泡跟手：真实量 dsh-pet DOM、120ms 节流、量不到退回 2s /
   assert.ok(anchorHook.includes('requestAnimationFrame'), '跟手要按帧采样（拖动的补间在 dsh-pet 自己的 rAF 里）')
   assert.ok(anchorHook.includes("BRIDGE + '/pet'"), '量不到立绘要退回 /pet')
   assert.ok(anchorHook.includes('PET_FALLBACK_POLL_MS'), '兜底轮询用 2s 常量')
+
+  // 用户 2026-10-27：挂件隐藏之后气泡还在原地冒。
+  // 采集侧：量不到立绘要立刻把气泡收起来（commit hidden），不能再拿旧坐标继续画。
+  assert.ok(anchorHook.includes("pickPetAnchor({ hidden: true"), '量不到立绘时要直接提交"挂件不在"')
+  assert.ok(anchorHook.includes('measureSprite'), '判定依据是真实立绘节点，不是猜的坐标')
+
+  // 渲染侧：挂件不在时连容器都不给 rect，气泡自然不挂。
+  const overlay = code.slice(code.indexOf('function LinesBubbleOverlay'), code.indexOf('// ── 插件详情页'))
+  assert.ok(overlay.includes('petGone'), '渲染侧要认 hidden，不能只看 rect')
+  assert.ok(overlay.includes('anchor.hidden === true'), 'hidden 要显式判')
 })
 
 test('设置页：日记分区卡片化 + 文件夹丢失的白话警告与重选入口', () => {
