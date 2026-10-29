@@ -1,0 +1,17 @@
+# M0 探针的 roster 行。
+#
+# 只插**一行**宿主插件：浏览器半由 package.json 的 `dsh.client` 自动拉起，
+# 不需要第二行（第二行只用于真正独立的插件，插了会让 overlay 注册两次）。
+#
+# 行的 `name` 必须与 package.json 的 `name` 一致；不一致会在
+# `dsh --dump-config` 里报 `patch: entry ai-waifu not found`。
+#
+# `config` 这一段对的是 index.js 导出的 Config（schemastery）：
+# 只放**一个**可配置项，多了就是第二个真源。
+#   diaryStaleMs  记录文档里「今日统计」的新鲜期（毫秒），默认 60000（60 秒）
+# 不写也一样跑：Config 里给了同样的默认值，改这里只是让用户能覆盖。
+- insert:
+    - id: ai-waifu
+      name: dsh-pet-cuteness-plugin
+      config:
+        diaryStaleMs: 60000

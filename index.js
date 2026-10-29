@@ -74,6 +74,7 @@ import {
   moveDiaryDir,
   migrateLegacyDiary,
   normalizeDiaryConfig,
+  listDiaryFiles,
   readDiaryDocFile,
   readDiaryMarker,
   readDiaryPointer,
@@ -81,6 +82,7 @@ import {
   recoverDiaryDir,
   resetRecoveryCache,
   validateDiaryPatch,
+  stripFrontmatter,
   writeDiaryPointer,
   writeTextAtomic,
 } from './src/diary-store.mjs'
@@ -981,6 +983,56 @@ export function apply(ctx, config = {}) {
   }
 
   let schedulerVia = 'none'
+  // ── 挂件悬浮面板上的入口 ──────────────────────────────────────────────
+  //
+  // dsh-pet 0.4.11 起有官方扩展点：`ctx.pet.registerPanelAction({id, label, title, order, onSelect})`。
+  // 它把按钮排进挂件悬浮面板的最后一行（最多 8 个），点击经 `POST /api/pet/panel-action`
+  // 派发回注册方自己的回调。这里只用这个公开接口，不碰它的内部结构。
+  //
+  // 用 `ctx.inject(['pet'])` 而不是直接 `ctx.get('pet')`：没装挂件的机器上回调根本不会跑，
+  // 也就不会在启动时留下一条 «挂件不存在» 的错误；装了的机器上，服务就绪后自动注册。
+  // 注册失败（比如按钮位满了）只记一条日志，不能让整个插件起不来。
+  ctx.inject(['pet'], (petCtx) => {
+    petCtx.effect(() => {
+      let pet = null
+      try {
+        pet = petCtx.get('pet', false)
+      } catch {
+        pet = null
+      }
+      if (!pet || typeof pet.registerPanelAction !== 'function') return
+      let dispose = null
+      try {
+        dispose = pet.registerPanelAction({
+          id: 'cuteness-diary-write',
+          label: '写日记',
+          title: '现在就补写今天的日记（不用等到 21:00）',
+          order: 10,
+          onSelect: async () => {
+            // 面板点击没有参数，也不需要回话：写的结果在设置页的「今天」里能看到。
+            const result = await writeDiaryNow(ctx, { trigger: 'panel-action' })
+            return result
+          },
+        })
+      } catch (error) {
+        try {
+          ctx.logger?.warn?.(`[dsh-pet-cuteness-plugin] 挂件面板按钮注册失败：${error?.message || error}`)
+        } catch {
+          /* 日志打不出来也不影响其它功能 */
+        }
+      }
+      return () => {
+        if (typeof dispose === 'function') {
+          try {
+            dispose()
+          } catch {
+            /* 挂件可能先卸载了，收回按钮失败无所谓 */
+          }
+        }
+      }
+    }, 'dsh-pet-cuteness-plugin: panel action')
+  })
+
   // 宿主的 timer 服务一旦挂上，下面的裸 setInterval 就自动停手（标志位由注入回调置位）。
   let timerServiceReady = false
   ctx.effect(() => {
@@ -2752,6 +2804,57 @@ function diaryTodaySummary(options = {}) {
   return value
 }
 
+/**
+ * 日记本里已有正文的开头片段，用来把"我们自己写过的日记"从采集里剔掉。
+ *
+ * 为什么需要：写日记的子代理会把正文回给调用方，那条回报会以 user/message
+ * 落在主会话里；子代理自己的会话里也留着一份 assistant 原稿。只靠标记/落款
+ * 判断挡不住它（公测版日记没有落款行），于是第二天的摘要里全是前一天的正文，
+ * 日记就开始"天天抄自己"。取已有正文前 60 字比对，是一条跟格式解耦的硬判据。
+ *
+ * 读不到/目录不在就返回空数组：宁可多收几条，也不能因为读日记失败而丢一天的素材。
+ */
+function collectDiaryBodyHeads(dir) {
+  if (typeof dir !== 'string' || !dir) return []
+  try {
+    const files = listDiaryFiles({ dir, io: { readdirSync }, limit: 30 })
+    const heads = []
+    for (const entry of files ?? []) {
+      // listDiaryFiles 回的是 { label, file, summary }，summary 已经是"去掉标题的正文第一句"。
+      const file = typeof entry === 'string' ? join(dir, entry) : entry?.file
+      if (!file) continue
+      const cached = typeof entry === 'object' && entry ? entry.summary : ''
+      let head = typeof cached === 'string' ? cached.replace(/\s+/g, ' ').trim() : ''
+      if (head.length < 12) {
+        try {
+          head = firstSentences(stripFrontmatter(readFileSync(file, 'utf8')), 60)
+        } catch {
+          continue
+        }
+      }
+      if (head.length >= 12) heads.push(head.replace(/…$/, ''))
+    }
+    return heads
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 拿"日记本里已有正文的开头"，读不到就当成没有。
+ *
+ * 配置只在记录文档里：这里读一次 `loadDiaryState()`，失败一律吞掉，
+ * 不让"读日记本失败"变成"今天一条素材都没有"。
+ */
+function diaryBodyHeadsFor(dirOption) {
+  try {
+    const dir = typeof dirOption === 'string' && dirOption ? dirOption : loadDiaryState({}).config?.dir
+    return collectDiaryBodyHeads(dir)
+  } catch {
+    return []
+  }
+}
+
 function computeDiaryTodaySummary(options = {}) {
   let dirs = []
   let readOk = 0
@@ -2761,6 +2864,7 @@ function computeDiaryTodaySummary(options = {}) {
     const day = collectDay({
       sessionsRoot: SESSIONS_ROOT,
       now: options.now ?? Date.now(),
+      excludeHeads: options.excludeHeads ?? diaryBodyHeadsFor(options.dir),
       listDirs: (root) => {
         dirs = listAllSessionDirs(root)
         return dirs

@@ -1046,6 +1046,12 @@ window.__ModuleLoader__.load({
 		    w: Math.max(1, finiteOr(rawViewport.w, 1280)),
 		    h: Math.max(1, finiteOr(rawViewport.h, 800)),
 		  }
+		  // 挂件收起来了（用户 2026-10-27：隐藏挂件后气泡还在原地冒）。
+		  // 这时候不是"换个位置接着画"，是"不画"——台词跟挂件一起出现、一起消失。
+		  if (source.hidden === true) return { level: 0, hidden: true, viewport: viewport }
+		  if (source.petDisplay && source.petDisplay.visible === false) {
+		    return { level: 0, hidden: true, viewport: viewport }
+		  }
 		  const sprite = source.sprite
 		  const width = finiteOr(sprite && sprite.width, 0)
 		  const height = finiteOr(sprite && sprite.height, 0)
@@ -1297,6 +1303,9 @@ window.__ModuleLoader__.load({
 		      const offsetY = neighborOffset(rawScale)
 		      if (result.level === 1) {
 		        if (prev && !shouldCommitAnchor(prev.rect, result.rect, lastAt, now)) return
+		      } else if (result.hidden === true) {
+		        // 挂件不在了：气泡一起收起来。已经收着就不重复渲染。
+		        if (prev && prev.hidden === true) return
 		      } else if (
 		        // 降级路径由 2 秒轮询驱动：只有 level/位置真的变了才重渲染。
 		        prev &&
@@ -1313,6 +1322,7 @@ window.__ModuleLoader__.load({
 		      lastAt = now
 		      const next = {
 		        level: result.level,
+		        hidden: result.hidden === true,
 		        rect: result.rect,
 		        viewport: result.viewport,
 		        offsetY: offsetY,
@@ -1344,8 +1354,9 @@ window.__ModuleLoader__.load({
 		        if (typeof document !== 'undefined' && document.hidden) return
 		        const sprite = measureSprite()
 		        if (!sprite) {
-		          // 立绘没了：退回 /pet 轮询（轮询里也会再量 DOM，出现即回 1 级）。
-		          commit(pickPetAnchor({ sprite: null, petDisplay: petDisplay, viewport: viewportOf() }), now)
+		          // 立绘没了 = 挂件被隐藏/关掉：气泡立刻一起收起来（不等 /pet 回包），
+		          // 然后交给 2 秒轮询；挂件重新出现时轮询会再量到 DOM，自己回到 1 级。
+		          commit(pickPetAnchor({ hidden: true, viewport: viewportOf() }), now)
 		          schedulePoll(PET_FALLBACK_POLL_MS)
 		          return
 		        }
@@ -1375,6 +1386,9 @@ window.__ModuleLoader__.load({
 		      } catch {
 		        /* 落到 /pet */
 		      }
+		      // 挂件现在不在：先让气泡立刻收起来，再问 /pet「它到底还被不该在」。
+		      // 收在等网络之前，是为了"点隐藏"这一下看得见反应，不是等 2 秒才消失。
+		      commit(pickPetAnchor({ hidden: true, viewport: viewportOf() }), nowMs())
 		      fetch(BRIDGE + '/pet', { method: 'GET' })
 		        .then((response) => response.json())
 		        .then((payload) => {
@@ -1383,7 +1397,9 @@ window.__ModuleLoader__.load({
 		          commit(pickPetAnchor({ sprite: null, petDisplay: petDisplay, viewport: viewportOf() }), nowMs())
 		        })
 		        .catch(() => {
-		          /* /pet 都读不到 → 3 级默认位置，不报错 */
+		          // /pet 都读不到：连"人在不在"都不知道，按不在处理，别在半空吊一个气泡。
+		          if (stopped) return
+		          commit(pickPetAnchor({ hidden: true, viewport: viewportOf() }), nowMs())
 		        })
 		        .then(() => {
 		          schedulePoll(PET_FALLBACK_POLL_MS)
@@ -1394,6 +1410,11 @@ window.__ModuleLoader__.load({
 		      if (stopped) return
 		      try {
 		        const sprite = measureSprite()
+		        if (!sprite) {
+		          commit(pickPetAnchor({ hidden: true, viewport: viewportOf() }), nowMs())
+		          schedulePoll(PET_FALLBACK_POLL_MS)
+		          return
+		        }
 		        commit(pickPetAnchor({ sprite: sprite, petDisplay: petDisplay, viewport: viewportOf() }), nowMs())
 		      } catch {
 		        /* resize 只是顺手对齐，失败不影响主循环 */
@@ -1634,8 +1655,10 @@ window.__ModuleLoader__.load({
 
 		  // 锚点容器始终渲染（0 尺寸也无所谓）：usePetAnchor 要先有这个节点才能判断
 		  // 有没有 transform 祖先；气泡本体等第一次量到锚点再挂上去，避免闪一下左上角。
-		  const rect = anchor ? anchor.rect : null
-		  const viewport = anchor ? anchor.viewport : null
+		  // 挂件被隐藏时（anchor.hidden）容器也不占位置、不画气泡：台词跟挂件同进同退。
+		  const petGone = anchor ? anchor.hidden === true : false
+		  const rect = anchor && !petGone ? anchor.rect : null
+		  const viewport = petGone ? null : anchor ? anchor.viewport : null
 		  const placement =
 		    rect && viewport
 		      ? core.planOverlay({
