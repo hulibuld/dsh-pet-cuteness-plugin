@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "dsh-pet-cuteness plugin",
-    "description": "A companion plugin for @linxin666/dsh-pet: gives the whale-girl a persona voice, Chinese reasoning, speech bubbles above her sprite, and a nightly diary. Its settings page manages the diary, pet state, affinity and treats. Requires @linxin666/dsh-pet."
-  }
-}
