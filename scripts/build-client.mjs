@@ -49,6 +49,10 @@ const MODULES = [
   // 这份算法在 src/bubble-placement.mjs 里已有 20+ 条数值用例，直接内联复用，
   // 不在浏览器半里重写一遍（重写就会两边漂移，而且几何错误在浏览器里极难发现）。
   'bubble-placement.mjs',
+  // 设置页的共用原语（色板/标度/组件）。用户 2026-10-31 的返工意见：
+  // 「新增 client/src/ui.js，共用原语」——12 个卡片各自手写内联样式，
+  // 同一个"次要文字"出现过四种灰度，必须收成一层。
+  'ui.mjs',
 ]
 
 /**
@@ -1687,6 +1691,11 @@ const FONT_TITLE = 13 // 卡片内的小标题、状态一句话
 const FONT_SM = 12 // 正文、按钮
 const FONT_XS = 11 // 说明、注释、码表
 const RADIUS = 8 // 卡片/输入框/按钮统一圆角
+
+// 共用原语（src/ui.mjs）：色板、字号三档、间距四档、圆角四档、十个组件。
+// 新写的界面一律从这里取，不要再手写字面量颜色。
+// 只造一次：主题（深/浅）在页面生命周期内不会变，每帧重算色板是白花钱。
+const UI = makePrimitives(h)
 const BTN_HEIGHT = 28 // 按钮统一高度（同高才排得整齐，不靠 padding 撑）
 
 const UI_MUTED = { color: 'var(--dsw-alias-label-secondary, rgba(255,255,255,0.6))' }
@@ -1918,36 +1927,9 @@ function DiaryRow(props) {
 
 /** 分区卡片：用户要的是「分区排版」，不是一串没有层次的行。 */
 function DiaryCard(props) {
-  return h(
-    'section',
-    {
-      style: {
-        marginTop: CARD_GAP,
-        padding: '4px ' + CARD_GAP + 'px 8px',
-        border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,0.08))',
-        borderRadius: RADIUS,
-        background: 'var(--dsw-alias-bg-layer-1, rgba(255,255,255,0.03))',
-      },
-    },
-    props.title
-      ? h(
-          'div',
-          {
-            style: Object.assign(
-              {
-                fontSize: FONT_SM,
-                fontWeight: 600,
-                margin: '10px 0 2px',
-                color: 'var(--dsw-alias-label-secondary, rgba(255,255,255,0.72))',
-              },
-              {},
-            ),
-          },
-          props.title,
-        )
-      : null,
-    props.children,
-  )
+  // 走共用原语（src/ui.mjs）。DOM 仍是 section + 可选标题 div，
+  // 但内边距/圆角/边框粗细统一由标度给，不再每个卡片自己写一遍。
+  return UI.Card({ title: props && props.title, children: props && props.children })
 }
 
 function DiaryStatusCard(props) {
@@ -3685,14 +3667,14 @@ function PluginSettings(props) {
   )
 
   return h(
-    'div',
-    { style: { padding: '4px 0 8px' } },
-    // 面板顶部一行小字：一句话说清这页是干什么的（用户要求「别写长」）。
-    h(
-      'div',
-      { style: Object.assign({ padding: '2px 0 8px', fontSize: FONT_SM, lineHeight: 1.6 }, muted) },
-      '这是大肥鱼的后台；日记与挂件都在这一页管。',
-    ),
+    UI.Page,
+    null,
+    // 页头：标题 + 一句话说清这页干什么（用户要求「别写长」）。
+    // 文案不许改：这是「设置 → 大肥鱼的后台」里唯一告诉用户"这页是干嘛的"的一句。
+    h(UI.PageHeader, {
+      title: '大肥鱼的后台',
+      subtitle: '这是大肥鱼的后台；日记与挂件都在这一页管。',
+    }),
     slow && !state
       ? h(
           'div',

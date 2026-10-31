@@ -4,6 +4,8 @@ import { test } from 'node:test'
 import {
   MAX_BODY_CHARS,
   MIN_BODY_CHARS,
+  SOFT_MIN_BODY_CHARS,
+  retryNudge,
   buildActivationRequest,
   DEFAULT_DIARIST_KEY,
   checkDiaristSupported,
@@ -216,4 +218,32 @@ test('renderDiaryFile：可选字段缺省时不写空行占位', () => {
   assert.equal(text.includes('diarist'), false)
   assert.equal(text.includes('output_tokens_today'), false)
   assert.equal(text.includes('written_at'), false)
+})
+
+/* ---------- 软下限：日记不能越写越短（用户 2026-10-30） ---------- */
+
+test('SOFT_MIN_BODY_CHARS：比硬失败线高，且落在提示词要求的区间内', () => {
+  assert.ok(SOFT_MIN_BODY_CHARS > MIN_BODY_CHARS, '软下限必须高于硬失败线，否则形同虚设')
+  assert.ok(SOFT_MIN_BODY_CHARS >= 500, '实测那几天滑到 458 字，软下限要能拦住这一档')
+  assert.ok(SOFT_MIN_BODY_CHARS < 800, '别把软下限顶到提示词下限上，那会让每一次都重写')
+})
+
+test('retryNudge：把上一版字数说出来，并给出可执行的粒度', () => {
+  const text = retryNudge(458)
+  assert.ok(text.includes('458'), '要告诉它上一版到底多少字，否则"再长点"它不知道长多少')
+  assert.ok(text.includes('一件事至少三句'), '要给执行的抓手，只喊写长会注水')
+  assert.ok(text.includes('不要靠重复'), '要明确禁掉凑字数')
+  assert.ok(text.startsWith('\n\n'), '要接在提示词后面，先空两行隔开')
+})
+
+test('retryNudge：字数缺失或非法时兜底成 0，不崩', () => {
+  assert.ok(retryNudge(undefined).includes('0 字'))
+  assert.ok(retryNudge('abc').includes('0 字'))
+})
+
+test('validateDiaryBody：偏短但合格的正文仍然通过（软下限只管重写，不管拒收）', () => {
+  const body = '字'.repeat(SOFT_MIN_BODY_CHARS - 100)
+  const result = validateDiaryBody(body)
+  assert.equal(result.ok, true, '软下限不能变成硬失败，否则用户会看到"正文太短"')
+  assert.equal(result.chars, SOFT_MIN_BODY_CHARS - 100)
 })

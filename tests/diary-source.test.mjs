@@ -208,7 +208,9 @@ test('prompt：第一人称、她的语气、不许编、不许自我指认', ()
   assert.ok(prompt.includes('不要标题'))
   // 2026-10-23 返工：日记要有小女孩的口气，不许写成工作汇报。
   assert.ok(prompt.includes('八九岁'))
-  assert.ok(prompt.includes('搬进新房子'))
+  // 2026-10-30 返工后："搬进新房子"只许出现在反例里，不能再教模型打这种比方。
+  assert.ok(prompt.includes('它搬进了新房子'), '反例留着当靶子')
+  assert.ok(!prompt.includes('装插件是"搬进新房子"'), '不再把比喻当写作要求')
   assert.ok(prompt.includes('主人'))
   assert.ok(prompt.includes('需要你决定'), '要明确禁止把待办塞进日记')
   assert.ok(prompt.includes('不要总结'))
@@ -235,7 +237,21 @@ test('prompt：不许"成年人模仿鲁迅"那套（反讽/自我概括/一句�
   assert.ok(prompt.includes('情绪直接说出来'))
   assert.ok(prompt.includes('才不是'))
   assert.ok(prompt.includes('大白饭'))
-  assert.ok(prompt.includes('300 到 700'), '长度要收紧，别再写成大散文')
+  assert.ok(prompt.includes('800 到 1200'), '字数要有下限，写太短通常是没讲清')
+  assert.ok(prompt.includes('写短了通常不是我没事可写'), '要把"写短=没讲清"这层因果说给模型')
+})
+
+/* 用户第三次返工（2026-10-30 逐字）：「日记感觉越写越短，而且乱用拟人。很多东西明明
+   可以直接说他偏偏要用修辞拟人，到最后使人误会」。
+   守两件事：①不再教它"装插件＝搬进新房子"这类比喻；②明确禁掉把工具当人（会害怕/会等我）。 */
+test('prompt：拟人只许用在我自己的情绪上，记述事实必须直说', () => {
+  const prompt = mod.buildDiaryPrompt({ dateLabel: '2026-10-30', digest: '- 记录', personaName: '深度求索娘' })
+  assert.ok(!prompt.includes('搬进新房子'), '不许再把装插件教成"搬进新房子"——用户说这会让人误会')
+  assert.ok(!prompt.includes('比喻只用小孩会用的'), '比喻条款整条删掉，别再鼓励打比方')
+  assert.ok(prompt.includes('不把东西当人'), '要明确禁止把文件/插件/气泡当人')
+  assert.ok(prompt.includes('躲起来'), '把"东西不会躲起来"具体写出来，模型才照做')
+  assert.ok(prompt.includes('它搬进了新房子'), '反例要留在 prompt 里当靶子')
+  assert.ok(prompt.includes('可是打开是空的'), '正例要给"直说"的写法')
 })
 
 test('prompt：没有摘要时也要说清"今天没有记录"', () => {

@@ -56,6 +56,8 @@ import {
   renderDiaryFile,
   tidyDiaryBody,
   validateDiaryBody,
+  SOFT_MIN_BODY_CHARS,
+  retryNudge,
 } from './src/diary-writer.mjs'
 import {
   DIARY_CONFIG_FILE,
@@ -2501,31 +2503,60 @@ async function writeDiaryNow(ctx, options = {}) {
       diaristKey,
       personaName: PERSONA_DISPLAY_NAME,
     })
-    const request = buildActivationRequest({ prompt, provider, model, cwd: config.dir })
-    // signal 是必填的：宿主内部会 `signal.throwIfAborted()`，
-    // 不给就炸成 `Cannot read properties of undefined (reading 'throwIfAborted')`。
-    const controller = new AbortController()
-    const abortTimer = setTimeout(() => {
-      controller.abort()
-    }, DIARY_WRITE_TIMEOUT_MS)
-    let activation
-    try {
-      activation = await subagents.startActivation({
-        provider: 'spawn',
-        label: `写日记 ${day.label}`,
-        request: { ...request, parent },
-        signal: controller.signal,
-      })
-    } finally {
-      clearTimeout(abortTimer)
+    // 一次执笔 = 起子代理 + 等它写完。抽成函数是因为字数不够时要再来一次（见下面的软下限）。
+    // 两次尝试共用一个总预算：页面对这条请求的超时是 180 秒，服务端必须自己先收住，
+    // 否则重写会把总时长顶到 240 秒，页面先超时、盘上却写好了，用户看到的是"失败"。
+    const writeDeadline = Date.now() + DIARY_WRITE_TIMEOUT_MS
+    const writeOnce = async (promptText) => {
+      const request = buildActivationRequest({ prompt: promptText, provider, model, cwd: config.dir })
+      const left = Math.max(0, writeDeadline - Date.now())
+      const attemptTimeout = Math.max(15_000, Math.min(DIARY_WRITE_TIMEOUT_MS, left))
+      // signal 是必填的：宿主内部会 `signal.throwIfAborted()`，
+      // 不给就炸成 `Cannot read properties of undefined (reading 'throwIfAborted')`。
+      const controller = new AbortController()
+      const abortTimer = setTimeout(() => {
+        controller.abort()
+      }, attemptTimeout)
+      let activation
+      try {
+        activation = await subagents.startActivation({
+          provider: 'spawn',
+          label: `写日记 ${day.label}`,
+          request: { ...request, parent },
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(abortTimer)
+      }
+      const id = activation?.childId ?? activation?.id ?? ''
+      const raw = await waitForChildText(id, attemptTimeout)
+      return { id, raw }
     }
-    const childId = activation?.childId ?? activation?.id ?? ''
-    const text = await waitForChildText(childId, DIARY_WRITE_TIMEOUT_MS)
-    if (!text.trim()) {
+
+    const first = await writeOnce(prompt)
+    let childId = first.id
+    if (!first.raw.trim()) {
       return { ok: false, code: 'timeout', message: '执笔没写出东西来', childId, elapsedMs: elapsed() }
     }
-    const body = tidyDiaryBody(text)
-    const checked = validateDiaryBody(body)
+    let body = tidyDiaryBody(first.raw)
+    let checked = validateDiaryBody(body)
+    // 软下限（用户 2026-10-30：「日记感觉越写越短」）：能落盘、但短得不像日记时，
+    // 带着"上一版只有 N 字"再写一次。只有在第二版**确实更长且仍然合格**时才换掉，
+    // 重试不能把一篇本来就合格的日记写坏。
+    // 留 30 秒余量给"起子代理 + 收尾"，不够就别硬重试——宁可先落一篇短的。
+    const canRetry = Date.now() + 30_000 < writeDeadline
+    if (checked.ok && checked.chars < SOFT_MIN_BODY_CHARS && canRetry) {
+      const retry = await writeOnce(prompt + retryNudge(checked.chars))
+      if (retry.raw.trim()) {
+        const body2 = tidyDiaryBody(retry.raw)
+        const checked2 = validateDiaryBody(body2)
+        if (checked2.ok && checked2.chars > checked.chars) {
+          body = body2
+          checked = checked2
+          childId = retry.id
+        }
+      }
+    }
     if (!checked.ok) return { ok: false, code: 'bad-body', message: checked.reason, childId, elapsedMs: elapsed() }
     const label = String(day.label)
     const content = renderDiaryFile({
