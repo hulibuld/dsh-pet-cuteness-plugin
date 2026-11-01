@@ -1,8 +1,24 @@
 {
   "name": "dsh-pet-cuteness-plugin",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "dsh-pet 的附属插件（不能单独运行）：按模型套用二次元人格、思维链中文化、台词与日记，让右下角那只鲸鱼娘有话说。",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hulibuld/dsh-pet-cuteness-plugin.git"
+  },
+  "homepage": "https://github.com/hulibuld/dsh-pet-cuteness-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/hulibuld/dsh-pet-cuteness-plugin/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "dsh-pet",
+    "deepseek-harness",
+    "persona",
+    "diary",
+    "cuteness"
+  ],
   "main": "index.js",
   "icon": "icon.svg",
   "exports": {
