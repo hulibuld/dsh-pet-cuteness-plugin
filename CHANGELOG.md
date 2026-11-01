@@ -15,10 +15,20 @@
 代价与约束：**每次改 `scripts/build-client.mjs` 之后必须先 `npm run build` 再提交**，
 `npm run build:check` 会在 CI/本地拦住「改了源码忘了重建」。
 
-不要用 `npm i github:hulibuld/dsh-pet-cuteness-plugin` 安装：包在 `probe/` 子目录，
-仓库根没有 `package.json`，npm 从 git 装会找不到包。装 npm 上的包名。
+不要用 `npm i github:hulibuld/dsh-pet-cuteness-plugin` 安装：那会把整个仓库当包抓，
+不跑构建、也不认 `dsh.bundle` 里的加载顺序。装 npm 上的包名。
 
 ---
+
+## 0.2.8 — 2026-11-01 补上 `repository`，好让插件市场收得到
+
+插件市场（awesome-dsh-plugin 那份目录）的抓取脚本是这样认包的：先读仓库根的
+`package.json` 拿到包名，再去 npm registry 查这个包，**只有 npm 上记录的
+repository 指回同一个 GitHub 仓库**才收录。我们的 `package.json` 一直没有
+`repository` 字段，registry 上那条是空的，于是每个版本都被判成「没有对应的 npm 包」
+而跳过 —— 目录里的 yml 写对了、PR 也合了，索引里始终没有这一项。
+
+这次补上 `repository` / `homepage` / `bugs` / `keywords`。装插件的方式没有任何变化。
 
 ## 0.2.7 — 2026-10-30 设置页换成共用原语；日记不再越写越短，也不再把事情讲歪
 
