@@ -68,6 +68,10 @@ npm run verify
 
 改逻辑改 `src/` 下的 `.mjs`，不要改 `client.js`，那是构建产物。改素材改上游真源再同步。提交前 `npm run verify` 必须绿。
 
+## 已知问题与修复记录
+
+累计的修复、现象、原因与修法记在 [docs/FIXES.md](docs/FIXES.md)。以后每修一次加一行，别攒着。
+
 ## 许可
 
 MIT。
